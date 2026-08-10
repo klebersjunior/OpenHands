@@ -76,3 +76,19 @@ Intent: `APPROVE`. GitHub rejeitou (`Review Can not approve your own pull reques
 ## Ação requerida
 
 Nenhuma para QA. Merge sob Tech Lead após AppSec PASS + este QA PASS.
+
+---
+
+## Addendum — mock-LLM profile-management (2026-08-10)
+
+**Veredicto:** FLAKE (não regressão do PR #6 / rebase).
+
+| Item | Evidência |
+|------|-----------|
+| Falha | `tests/e2e/mock-llm/settings/mock-llm-profile-management.spec.ts:105` — poll 15s: `"deletion-guard-inactive" should become active after deleting "deletion-guard-active"` |
+| Run | https://github.com/klebersjunior/OpenHands/actions/runs/31414303595 attempt 1 @ `f992dfaa4` (59 passed, 1 failed, 2 did not run → wrapper exit 124) |
+| Contraste | Mesmo teste PASS na run anterior do #6 @ `9b9ee1187` |
+| Escopo PR | `git diff 9b9ee1187..f992dfaa4` e `main...HEAD`: **nenhum** arquivo de profile / `useEnsureActiveProfile` / settings LLM |
+| Mecânica | Pós-delete, `useEnsureActiveProfile` ativa outro profile; o assert faz `page.goto` a cada tick do `expect.poll` (15s) com `waitForTestId` default 30s — reload pode abortar a mutation de reconcile e o budget do poll é apertado em CI |
+
+**Ação QA:** sem patch neste PR (não enfraquece AC; TL já re-rodou — attempt 3). Sem label `Blocked`. Se o flake repetir no re-run, harden o poll em PR de teste separado (timeout/`toPass` alinhado a `activateProfileViaUI`, sem reload agressivo).
