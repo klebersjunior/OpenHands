@@ -6,7 +6,7 @@ agente: qa
 data: 2026-08-10
 repo: klebersjunior/OpenHands
 branch: feat/fase3-autonomy-ui-195
-commit: 8440b80b552a24f5ab1cd6729bc422064a94cc34
+commit: 20a574a34794b6a5d26cf6cb29c26a9cf9d35898
 ci: vitest-scoped+i18n+engmgr-pytest; e2e-mock-llm N/A (fora mapping)
 ---
 
@@ -14,8 +14,7 @@ ci: vitest-scoped+i18n+engmgr-pytest; e2e-mock-llm N/A (fora mapping)
 
 **Veredicto:** PASS  
 **PR:** https://github.com/klebersjunior/OpenHands/pull/13  
-**Tip avaliado (FE+Design):** `20a574a34794b6a5d26cf6cb29c26a9cf9d35898`  
-**Laudo commit:** `8440b80b552a24f5ab1cd6729bc422064a94cc34`  
+**Tip avaliado:** `20a574a34794b6a5d26cf6cb29c26a9cf9d35898` (FE + Design; laudo QA neste PR)  
 **Worktree:** `.tmp/worktrees/195`  
 **Revisor:** QA ≠ autor FE. Design PASS **não** auto-assina AC. Evidência própria.
 
