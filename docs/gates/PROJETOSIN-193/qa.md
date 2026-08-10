@@ -1,94 +1,71 @@
 ---
 card: PROJETOSIN-193
 pr: 12
-veredicto: FAIL
+veredicto: PASS
 agente: qa
 data: 2026-08-10
-tip: a91c1e8cf
-ci: vitest pentest-ipc+electron-hooks-status (31 passed); typecheck FAIL (ubuntu CI Lint); boot-log regressão OK
+tip: 91a3dbf0f
+ci: typecheck PASS local + CI ubuntu Lint PASS (job 93588240398); vitest pentest-ipc+electron-hooks-status 31/31; re-gate após FAIL AC-193-6
 repo: klebersjunior/OpenHands
 branch: feat/fase3-electron-ipc-193
 ---
 
-# QA — PROJETOSIN-193 (Electron Docker/ADB IPC)
+# QA — PROJETOSIN-193 (Electron Docker/ADB IPC) — re-gate
 
-**Veredicto:** FAIL
+**Veredicto:** PASS
 
-**Revisor:** QA gate (≠ autor DevOps/Backend). Tip `a91c1e8cf`. Spec `docs/specs/fase-3/193-electron-docker-adb-ipc.md` · PR [#12](https://github.com/klebersjunior/OpenHands/pull/12).
+**Revisor:** QA gate (≠ autor DevOps/Backend). Tip `91a3dbf0fa0a7883221dfaf948c16bde9b1461b6` (≥ fix `91a3dbf0f`). Spec `docs/specs/fase-3/193-electron-docker-adb-ipc.md` · PR [#12](https://github.com/klebersjunior/OpenHands/pull/12).
 
-**AppSec:** PASS (`docs/gates/PROJETOSIN-193/appsec.md`) — residual MEDIUM/LOW não bloqueiam AppSec.
+**AppSec:** PASS (`docs/gates/PROJETOSIN-193/appsec.md`) — tipagem no fix não altera superfície de segurança; residual MEDIUM/LOW não bloqueiam.
 
-**Mergeable (eixo QA):** **não** — AC-193-6 falha: `npm run lint` / `tsc` vermelho no CI ubuntu. Tech Lead **não** deve aprovar merge até typecheck verde + re-gate QA.
+**Mergeable (eixo QA + AppSec):** **sim** — Tech Lead **pode** aprovar merge no eixo gates AppSec+QA neste tip, após confirmar CI `test-and-build (ubuntu)` verde no PR (equivalente ao `npm run lint` / typecheck que falhou no gate anterior).
 
-## Escopo
+## Escopo re-gate
 
-- Guards/parsers IPC Electron (`electron/pentest-ipc/*`, preload, wiring `main.mjs`)
-- Helper browser-safe `src/api/pentest/electron-hooks-status.ts`
-- Testes `__tests__/electron/pentest-ipc.test.ts`, `__tests__/api/pentest/electron-hooks-status.test.ts`
-- Regressão `boot-log:*` / `desktopBoot` vs `pentestNative`
+- Confirmar tip ≥ `91a3dbf0f`
+- Revalidar AC-193-6 (typecheck) + smoke AC-193-1…5
+- Diff do fix: JSDoc unions em `.mjs`, casts em testes, `as unknown as Window` em `electron-hooks-status.ts` — **sem mudança de comportamento** de guards/parsers
 
 ## Critérios de aceite
 
 | AC | Status | Evidência |
 |----|--------|-----------|
-| AC-193-1 | PASS | PoC QA próprio: 7 canais (`docker:compose:*`, `adb:*`) com flag off → `hooks_disabled` / 403; `spawn_count === 0`. Vitest AC-193-1. Non-Electron / public → `arePentestHooksEnabled` false. |
-| AC-193-2 | PASS | PoC: status disabled `{ enabled:false, dockerAvailable:false, adbAvailable:false, version:"1" }` sem spawn; com flag on `enabled:true` + probes (binários ausentes → available false). Vitest AC-193-2. |
-| AC-193-3 | PASS* | PoC: `/evil/elsewhere` → `path_not_allowed`; `..` que escapa root → `path_not_allowed`; `isPathInsideRoot('/allowed/root/../secret', …)` false. Residual (AppSec LOW): `proj/../sib` **dentro** do root ainda `ok:true` — escape pós-resolve coberto; rejeição literal de todo token `..` não implementada. |
-| AC-193-4 | PASS | PoC: `parseAdbDevices` estável; `assertAdbSerial('bad;rm')` → `invalid_serial`; Vitest disconnect inválido sem spawn. |
-| AC-193-5 | PASS | PoC fonte: `pentest-preload.cjs` só `pentestNative` + 1× `require("electron")`; sem `child_process`/`process.env`. `preload.cjs` mantém `desktopBoot` / `boot-log:` e **não** expõe `pentestNative`. |
-| AC-193-6 | **FAIL** | Vitest local 31/31 sem Docker/ADB, **mas** CI `test-and-build (ubuntu)` → Lint/`tsc` **FAILURE** (job `93585716137`, run `31428442793`). Type errors em `__tests__/electron/pentest-ipc.test.ts` e `src/api/pentest/electron-hooks-status.ts`. |
+| AC-193-1 | PASS | Vitest `AC-193-1: flag off → hooks_disabled and zero spawn` + suite `arePentestHooksEnabled` (31/31 no tip). Comportamento inalterado vs laudo FAIL. |
+| AC-193-2 | PASS | Vitest `AC-193-2: status reflects flag without spawning when disabled`. |
+| AC-193-3 | PASS* | Vitest `AC-193-3: path outside roots → path_not_allowed`; residual AppSec LOW (`..` colapsado dentro do root) inalterado. |
+| AC-193-4 | PASS | Vitest `AC-193-4: invalid serial on disconnect` + `assertAdbSerial('bad;rm')` → `invalid_serial`. |
+| AC-193-5 | PASS | Vitest preload surface: `pentestNative` + `getStatus`; loading `preload.cjs` mantém `desktopBoot` / boot-log only. |
+| AC-193-6 | **PASS** | Local: `npm run typecheck` exit 0. CI ubuntu job `93588240398` step **Lint** (`react-router typegen && tsc` via `npm run lint`) → **success**. Vitest IPC/hooks **31 passed**. Fix desbloqueia erros tsc do gate FAIL (JSDoc `.mjs`, unions `.code`, mock spawn, cast Window). |
 
-\* AC-193-3 alinhado ao residual AppSec LOW; não é o motivo do FAIL deste laudo.
+\* AC-193-3 alinhado ao residual AppSec LOW; não bloqueia.
 
 ## Regressão boot-log / desktopBoot
 
-**PASS** — inspeção estática tip `a91c1e8cf`:
-
-- Loading window: `preload: …/preload.cjs`; handlers `boot-log:set-expanded|copy|quit` + sends `boot-log:batch|fatal` intactos; guard `isLoadingWinEvent`.
-- Main window: `preload: …/pentest-preload.cjs` (comentário explícito: não mesclar com splash).
-- `registerPentestIpc` registrado **após** handlers boot-log; superfícies isoladas.
-- Vitest: “loading preload still owns desktopBoot / boot-log only”.
+**PASS** — smoke via Vitest “loading preload still owns desktopBoot / boot-log only”; fix tipagem não toca `preload.cjs` / handlers `boot-log:*`.
 
 ## Regressão CI / lint
 
 | Check | Resultado |
 |-------|-----------|
-| `npx vitest run __tests__/electron/pentest-ipc.test.ts __tests__/api/pentest/electron-hooks-status.test.ts` | **31 passed** (worktree QA) |
-| CI ubuntu `npm run lint` (`react-router typegen && tsc`) | **FAIL** — ver erros abaixo |
-| CI windows `test-and-build` | SUCCESS (não anula falha ubuntu) |
-| ESLint em `electron/pentest-ipc` (fora do `eslint src` do script lint) | prettier noise em `.mjs` — **fora** do path CI atual; não é o blocker |
-| `pr-title` conventional | FAILURE no PR — processo/título; fora do escopo AC funcional |
+| Tip ≥ `91a3dbf0f` | **OK** — HEAD = `91a3dbf0fa0a7883221dfaf948c16bde9b1461b6` |
+| `npm run typecheck` | **PASS** (exit 0) |
+| `npx vitest run __tests__/electron/pentest-ipc.test.ts __tests__/api/pentest/electron-hooks-status.test.ts` | **31 passed** |
+| CI ubuntu `test-and-build` Lint | **PASS** (job `93588240398`, tip `91a3dbf0f`) — desbloqueia AC-193-6 |
+| CI ubuntu Test/Build | Em andamento no re-gate; Lint já verde (critério AC-193-6) |
+| `Validate PR description` | FAILURE processo (`HUMAN:`) — **fora** do escopo AC funcional; humano deve preencher |
 
-### Erros `tsc` que bloqueiam AC-193-6 (amostra CI)
+## Residual (não bloqueia)
 
-`__tests__/electron/pentest-ipc.test.ts`:
-
-- `getMainWebContents` / `projectDir` “não existem” no tipo inferido dos `.mjs` (JSDoc/exports tipados de forma estreita demais ou ausente)
-- Discriminated unions: `.code` em resultados de `assertAdbConnectTarget` / `buildComposeArgv`
-- Mock `spawnFn` / `EventEmitter` sem `stdout`/`stderr`/`kill`; params `channel`/`fn` implícitos `any`
-
-`src/api/pentest/electron-hooks-status.ts`:
-
-- `(globalThis as Window)` inválido sob `tsc` Node/DOM overlap — sugerido `as unknown as Window` ou narrow via `typeof window`
-
-## Ação requerida (executor DevOps/Backend)
-
-1. Corrigir typecheck: tipagem JSDoc nos módulos `electron/pentest-ipc/*.mjs` **e/ou** casts/narrowing nos testes; cast seguro em `electron-hooks-status.ts`.
-2. Confirmar localmente: `npm run typecheck` (ou `npm run lint`) verde **e** os 31 vitest.
-3. Pedir **re-gate QA** no tip corrigido (não auto-assinar).
-4. Label `Blocked` permanece até QA PASS.
-
-## Residual (não bloqueia sozinho)
-
-- AC-193-3 literal “path com `..` rejeitado” vs aceitar `..` colapsado dentro do root — AppSec LOW; documentar ou rejeitar tokens `..` se TL quiser aderência literal.
-- Symlink / TOCTOU (AppSec MEDIUM) — fora do FAIL QA.
+- AC-193-3 literal `..` vs collapse in-root — AppSec LOW
+- Symlink / TOCTOU — AppSec MEDIUM
+- PR description `HUMAN:` — processo, não AC-193-6
 
 ## Conclusão para Tech Lead
 
 | Gate | Status |
 |------|--------|
 | AppSec | PASS |
-| QA | **FAIL** |
+| QA | **PASS** (re-gate tip `91a3dbf0f`) |
 | Design | N/A |
 
-**Pode aprovar merge?** **Não** — falta QA PASS após fix de typecheck/CI.
+**Pode aprovar merge (AppSec+QA)?** **Sim** — ambos PASS neste tip. Remover label `Blocked`. Não auto-assina AppSec; AppSec PASS prévio permanece válido (delta só tipagem). Confirmar CI ubuntu verde antes do merge administrativo; falha de `Validate PR description` exige ação humana no corpo do PR, não re-gate QA.
