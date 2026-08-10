@@ -4,7 +4,7 @@ pr: 14
 veredicto: PASS
 agente: appsec
 data: 2026-08-10
-tip: ccdce96a5
+tip: ecb4db6b4
 ci: npm-audit-high-clean; review manual physical-device + pentestNative contract (193)
 repo: klebersjunior/OpenHands
 branch: feat/fase3-physical-device-194
@@ -14,7 +14,7 @@ branch: feat/fase3-physical-device-194
 
 **Veredicto:** PASS
 
-**Revisor:** AppSec gate (≠ autor). Implementação: Backend @ tip feature `a4e0ade87` (+ QA laudo `ccdce96a5`). Este laudo **não** auto-assina QA nem Design. Spec `docs/specs/fase-3/194-physical-android-device.md` · QA PASS em `docs/gates/PROJETOSIN-194/qa.md` · PR [#14](https://github.com/klebersjunior/OpenHands/pull/14).
+**Revisor:** AppSec gate (≠ autor). Implementação: Backend @ tip feature `a4e0ade87` (+ QA `ccdce96a5` + este laudo). Este laudo **não** auto-assina QA nem Design. Spec `docs/specs/fase-3/194-physical-android-device.md` · QA PASS em `docs/gates/PROJETOSIN-194/qa.md` · PR [#14](https://github.com/klebersjunior/OpenHands/pull/14).
 
 **Mergeable (eixo AppSec):** sim — sem critical/high; residuals MEDIUM/LOW não bloqueiam. Design leve: N/A (UI status mínima na aba Emulador já gated; sem gate Design obrigatório neste card).
 
@@ -29,7 +29,7 @@ Consumo do contrato `window.pentestNative` (PROJETOSIN-193) para device físico 
 - Docs Opção B: `services/mcp-servers/README.md` (`ADB_HOST=host.docker.internal`)
 - **Sem** delta `electron/pentest-ipc/*` / preload neste PR (allowlist 193 não reimplementada aqui)
 
-Worktree `.tmp/worktrees/194` @ tip `ccdce96a5`. Contrato IPC de enforcement permanece no card 193 (AppSec PASS tip `34fc61adb`).
+Worktree `.tmp/worktrees/194` @ tip `ecb4db6b4`. Contrato IPC de enforcement permanece no card 193 (AppSec PASS tip `34fc61adb`).
 
 ## Checklist
 
@@ -83,14 +83,16 @@ Vitest “does not expose shell or install” inspeciona keys do mock; cobertura
 
 ## Evidência
 
-- Tip: `ccdce96a5` (feature `a4e0ade87`)
+- Tip: `ecb4db6b4` (feature `a4e0ade87` + QA + AppSec laudo)
 - QA: PASS (`docs/gates/PROJETOSIN-194/qa.md`)
 - Cherry-pick: `pentest-native.d.ts` idêntico a 193; helper status semanticamente equivalente
 - Dependência 193: AppSec PASS + allowlist ADB `devices|connect|disconnect|wait-for-device`
+- Plane: label `Blocked` removida após PASS
 
 ## Ação requerida
 
-1. **PASS** — remover label `Blocked` se ainda presente por dependência prévia.
-2. Tech Lead: merge liberado no eixo **AppSec + QA** neste tip (`ccdce96a5` ou successor que preserve os controles). Design leve **N/A**.
+1. **PASS** — label `Blocked` removida no Plane.
+2. Tech Lead: merge liberado no eixo **AppSec + QA** neste tip (`ecb4db6b4` ou successor que preserve os controles). Design leve **N/A**.
 3. Residuals MEDIUM/LOW → backlog; não bloqueiam PROJETOSIN-194.
 4. Garantir que PR #12 (193) / allowlist main esteja mergeada ou disponível na base antes de confiar no IPC em runtime Desktop.
+Review GitHub: COMMENT (APPROVE bloqueado — mesmo account do autor do PR).
