@@ -48,6 +48,16 @@ export interface ConversationMetadata {
   engagement_id?: string | null;
   autonomy_mode?: AutonomyMode | null;
   runtime_profile?: PentestRuntimeProfile | null;
+  /** Selected physical ADB serial (PROJETOSIN-194). */
+  physical_device_serial?: string | null;
+  /** Optional TCP host used with `adb connect` for LAN devices. */
+  physical_adb_host?: string | null;
+  physical_adb_port?: number | null;
+  /**
+   * Runtime ADB target override for engagement metadata.
+   * `physical` → Opção B (`ADB_HOST=host.docker.internal` on Desktop).
+   */
+  pentest_adb_target?: "physical" | "emulator" | null;
 }
 
 export const toPluginCoordinates = (plugin: PluginSpec): PluginSpec => ({

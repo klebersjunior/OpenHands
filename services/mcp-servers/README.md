@@ -43,6 +43,7 @@ launcher must **not** attach `PENTEST_MCP_MOBILE_CMD`.
 | `MOBSF_API_KEY` | MobSF API key (env only; never hardcoded) |
 | `ADB_HOST` | Generic ADB endpoint host (default `android-emulator`) |
 | `ADB_PORT` | Generic ADB endpoint port (default `5555`) |
+| `PENTEST_ADB_TARGET` | `emulator` (default) \| `physical` — when `physical`, Desktop injects `ADB_HOST=host.docker.internal` (Opção B / PROJETOSIN-194) so mcp-mobile keeps one ADB adapter |
 | `MCP_WEBSCAN_TIMEOUT_SEC` | Timeout for intrusive web tools (default 300) |
 | `MCP_MOBILE_USE_REAL_BINARIES` | Set `1` to invoke real `adb`/`apktool`/`jadx`/`frida` |
 | `DEFECTDOJO_API_URL` | One-way DefectDojo mirror base URL |
@@ -126,6 +127,26 @@ or set `OPENHANDS_CONFIRMATION_TOKEN` / pass `confirmation_token` on re-run.
 Compose fragment (internal network only — no host port publish in production):
 `docker/runtimes/mobile/compose.mobsf.fragment.yml`. Emulator lifecycle is
 PROJETOSIN-191; UI/upload proxy is PROJETOSIN-192.
+
+## Physical device (PROJETOSIN-194) — Opção B
+
+`mcp-mobile` always talks to a **generic** ADB TCP endpoint (`ADB_HOST` /
+`ADB_PORT`). Electron IPC (PROJETOSIN-193) only discovers/connects devices on
+the **host**; it does **not** replace mcp-mobile or expose `adb shell` /
+`install` to the renderer.
+
+When conversation metadata sets `pentest_adb_target=physical`:
+
+1. Desktop injects `ADB_HOST=host.docker.internal` (Docker Desktop) or the host
+   gateway IP into the engagement runtime env (no full compose recreate required
+   when env override is enough).
+2. Host `adb` keeps the USB/LAN device online; runtime reaches it through the
+   published ADB port on the host.
+3. Linux without the DNS alias: add
+   `extra_hosts: ["host.docker.internal:host-gateway"]` or set `ADB_HOST` to
+   the docker0 gateway IP.
+
+Default `PENTEST_ADB_TARGET=emulator` keeps `ADB_HOST=android-emulator`.
 
 ## Tests
 
