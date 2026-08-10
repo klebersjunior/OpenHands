@@ -81,14 +81,27 @@ Nenhuma para QA. Merge sob Tech Lead após AppSec PASS + este QA PASS.
 
 ## Addendum — mock-LLM profile-management (2026-08-10)
 
-**Veredicto:** FLAKE (não regressão do PR #6 / rebase).
+**Veredicto inicial:** FLAKE determinístico no tip `f992dfaa4` (3× FAIL consecutivos — não flake aleatório).
 
 | Item | Evidência |
 |------|-----------|
 | Falha | `tests/e2e/mock-llm/settings/mock-llm-profile-management.spec.ts:105` — poll 15s: `"deletion-guard-inactive" should become active after deleting "deletion-guard-active"` |
-| Run | https://github.com/klebersjunior/OpenHands/actions/runs/31414303595 attempt 1 @ `f992dfaa4` (59 passed, 1 failed, 2 did not run → wrapper exit 124) |
+| Run | https://github.com/klebersjunior/OpenHands/actions/runs/31414303595 @ `f992dfaa4` (59 passed, 1 failed) |
 | Contraste | Mesmo teste PASS na run anterior do #6 @ `9b9ee1187` |
 | Escopo PR | `git diff 9b9ee1187..f992dfaa4` e `main...HEAD`: **nenhum** arquivo de profile / `useEnsureActiveProfile` / settings LLM |
-| Mecânica | Pós-delete, `useEnsureActiveProfile` ativa outro profile; o assert faz `page.goto` a cada tick do `expect.poll` (15s) com `waitForTestId` default 30s — reload pode abortar a mutation de reconcile e o budget do poll é apertado em CI |
+| Causa | Pós-delete, `expect.poll` fazia `page.goto("/settings/llm")` a cada intervalo — reload abortava a mutation delete/activate de `useEnsureActiveProfile` |
 
-**Ação QA:** sem patch neste PR (não enfraquece AC; TL já re-rodou — attempt 3). Sem label `Blocked`. Se o flake repetir no re-run, harden o poll em PR de teste separado (timeout/`toPass` alinhado a `activateProfileViaUI`, sem reload agressivo).
+### Hardening aplicado (mesmo PR / branch)
+
+**Veredicto pós-fix:** PASS (hardening de teste; AC intacto).
+
+Mudança em `mock-llm-profile-management.spec.ts` (step pós-delete):
+
+1. Após `delete-profile-confirm`, esperar row ACTIVE sumir via locator/`toHaveCount(0)` **sem reload** (timeout 30s).
+2. Confirmar row INACTIVE permanece.
+3. Assert `profile-active-badge` first visible (timeout 30s) — mesmo contrato reativo de `activateProfileViaUI`.
+4. **Removido** `page.goto` de dentro do poll.
+
+**Rodou local?** Não. Stack mock-LLM inviável neste host Windows: `MOCK_LLM_PYTHON` default `python3` ausente no PATH; `webServer` do Playwright usa shell POSIX (`[ -f build/... ]`, `exec env`). Validação fica no CI do fork após push.
+
+**Ação:** push fork-only; não mergear; não tocar mcp-sast/DD de produção.
