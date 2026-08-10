@@ -127,6 +127,16 @@ Compose fragment (internal network only — no host port publish in production):
 `docker/runtimes/mobile/compose.mobsf.fragment.yml`. Emulator lifecycle is
 PROJETOSIN-191; UI/upload proxy is PROJETOSIN-192.
 
+## Physical device vs Electron IPC (PROJETOSIN-193 / 194)
+
+`mcp-mobile` talks to an **ADB endpoint resolved by the engagement** (`ADB_HOST` /
+`ADB_PORT`, typically the compose emulator service). **Electron host IPC**
+(`window.pentestNative` / `adb:*` channels from PROJETOSIN-193) is a separate
+local-desktop bridge for the pentester machine — it does **not** replace
+`mcp-mobile`. Physical-device reconnect UI is PROJETOSIN-194 and still routes
+agent tools through the engagement ADB endpoint / mcp-mobile, not free-form
+`adb shell` over IPC.
+
 ## Tests
 
 ```bash
