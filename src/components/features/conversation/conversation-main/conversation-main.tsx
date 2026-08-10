@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { cn } from "#/utils/utils";
 import { ChatInterfaceWrapper } from "./chat-interface-wrapper";
 import { ConversationTabContent } from "../conversation-tabs/conversation-tab-content/conversation-tab-content";
@@ -16,6 +17,7 @@ import {
   PentestAutonomyHeaderControls,
   usePentestConversationAutonomy,
 } from "#/components/features/pentest/pentest-autonomy-header";
+import { useOptionalConversationId } from "#/hooks/use-conversation-id";
 
 function getDesktopTabPanelClass(isRightPanelShown: boolean) {
   return isRightPanelShown
@@ -23,13 +25,15 @@ function getDesktopTabPanelClass(isRightPanelShown: boolean) {
     : "w-0 translate-x-full opacity-0";
 }
 
-function ChatPaneHeader({
+function ChatPaneHeaderShell({
   isSidebarRailHidden,
+  trailing,
+  banners,
 }: {
   isSidebarRailHidden: boolean;
+  trailing: ReactNode;
+  banners: ReactNode;
 }) {
-  const autonomy = usePentestConversationAutonomy();
-
   return (
     <>
       <div
@@ -41,28 +45,68 @@ function ChatPaneHeader({
       >
         {isSidebarRailHidden ? <SidebarMobileMenuToggle /> : null}
         <div className="min-w-0 flex-1">
-          <ConversationNameWithStatus
-            trailing={
-              autonomy.active ? (
-                <PentestAutonomyHeaderControls
-                  autonomyMode={autonomy.autonomyMode}
-                  isLoading={autonomy.isLoading}
-                  isSaving={autonomy.isSaving}
-                  isArchived={autonomy.isArchived}
-                  onChange={autonomy.patchAutonomy}
-                />
-              ) : null
-            }
-          />
+          <ConversationNameWithStatus trailing={trailing} />
         </div>
       </div>
-      {autonomy.active && (
-        <PentestAutonomyBanners
-          pendingRestart={autonomy.propagation === "pending_restart"}
-          errorMessage={autonomy.errorMessage}
-        />
-      )}
+      {banners}
     </>
+  );
+}
+
+function ChatPaneHeader({
+  isSidebarRailHidden,
+}: {
+  isSidebarRailHidden: boolean;
+}) {
+  const { conversationId } = useOptionalConversationId();
+
+  // Layout tests / non-conversation shells lack conversationId — keep header
+  // mountable without pentest autonomy hooks (QueryClient / engagement).
+  if (!conversationId) {
+    return (
+      <ChatPaneHeaderShell
+        isSidebarRailHidden={isSidebarRailHidden}
+        trailing={null}
+        banners={null}
+      />
+    );
+  }
+
+  return (
+    <ChatPaneHeaderWithAutonomy isSidebarRailHidden={isSidebarRailHidden} />
+  );
+}
+
+function ChatPaneHeaderWithAutonomy({
+  isSidebarRailHidden,
+}: {
+  isSidebarRailHidden: boolean;
+}) {
+  const autonomy = usePentestConversationAutonomy();
+
+  return (
+    <ChatPaneHeaderShell
+      isSidebarRailHidden={isSidebarRailHidden}
+      trailing={
+        autonomy.active ? (
+          <PentestAutonomyHeaderControls
+            autonomyMode={autonomy.autonomyMode}
+            isLoading={autonomy.isLoading}
+            isSaving={autonomy.isSaving}
+            isArchived={autonomy.isArchived}
+            onChange={autonomy.patchAutonomy}
+          />
+        ) : null
+      }
+      banners={
+        autonomy.active ? (
+          <PentestAutonomyBanners
+            pendingRestart={autonomy.propagation === "pending_restart"}
+            errorMessage={autonomy.errorMessage}
+          />
+        ) : null
+      }
+    />
   );
 }
 
