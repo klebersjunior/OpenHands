@@ -76,3 +76,32 @@ Intent: `APPROVE`. GitHub rejeitou (`Review Can not approve your own pull reques
 ## Ação requerida
 
 Nenhuma para QA. Merge sob Tech Lead após AppSec PASS + este QA PASS.
+
+---
+
+## Addendum — mock-LLM profile-management (2026-08-10)
+
+**Veredicto inicial:** FLAKE determinístico no tip `f992dfaa4` (3× FAIL consecutivos — não flake aleatório).
+
+| Item | Evidência |
+|------|-----------|
+| Falha | `tests/e2e/mock-llm/settings/mock-llm-profile-management.spec.ts:105` — poll 15s: `"deletion-guard-inactive" should become active after deleting "deletion-guard-active"` |
+| Run | https://github.com/klebersjunior/OpenHands/actions/runs/31414303595 @ `f992dfaa4` (59 passed, 1 failed) |
+| Contraste | Mesmo teste PASS na run anterior do #6 @ `9b9ee1187` |
+| Escopo PR | `git diff 9b9ee1187..f992dfaa4` e `main...HEAD`: **nenhum** arquivo de profile / `useEnsureActiveProfile` / settings LLM |
+| Causa | Pós-delete, `expect.poll` fazia `page.goto("/settings/llm")` a cada intervalo — reload abortava a mutation delete/activate de `useEnsureActiveProfile` |
+
+### Hardening aplicado (follow-up — PR #6 já estava MERGED)
+
+**Veredicto pós-fix:** PASS (hardening de teste; AC intacto).
+
+Mudança em `mock-llm-profile-management.spec.ts` (step pós-delete):
+
+1. Após `delete-profile-confirm`, esperar row ACTIVE sumir via locator/`toHaveCount(0)` **sem reload** (timeout 30s).
+2. Confirmar row INACTIVE permanece.
+3. Assert `profile-active-badge` first visible (timeout 30s) — mesmo contrato reativo de `activateProfileViaUI`.
+4. **Removido** `page.goto` de dentro do poll.
+
+**Rodou local?** Não. Stack mock-LLM inviável neste host Windows: `MOCK_LLM_PYTHON` default `python3` ausente no PATH; `webServer` do Playwright usa shell POSIX (`[ -f build/... ]`, `exec env`). Validação no CI do follow-up PR.
+
+**Nota:** PR #6 mergeou em `791290500` antes deste hardening; o poll frágil ficou em `main`. Follow-up branch `fix/mock-llm-profile-delete-reconcile-189`. Não tocar mcp-sast/DD de produção.

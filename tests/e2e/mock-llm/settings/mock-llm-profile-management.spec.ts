@@ -184,45 +184,45 @@ test.describe("active profile deletion + reconciliation", () => {
 
     // ── Deleting the active profile reconciles to the remaining one ──
     await test.step("deleting the active profile activates the remaining profile", async () => {
-      const activeRow = await rowFor(ACTIVE_PROFILE);
-      expect(activeRow).not.toBeNull();
+      // Prefer exact title match (same as activateProfileViaUI) so waits are
+      // stable without relying on substring textContent scans.
+      const activeRowLocator = page
+        .getByTestId("profile-row")
+        .filter({ has: page.locator(`span[title="${ACTIVE_PROFILE}"]`) });
+      const inactiveRowLocator = page
+        .getByTestId("profile-row")
+        .filter({ has: page.locator(`span[title="${INACTIVE_PROFILE}"]`) });
 
-      await activeRow!.getByTestId("profile-menu-trigger").click();
+      await expect(activeRowLocator).toHaveCount(1);
+      await activeRowLocator.first().getByTestId("profile-menu-trigger").click();
       await waitForTestId(page, "profile-actions-menu");
       await page.getByTestId("profile-delete").click();
 
       // Confirm in the delete modal.
       await page.getByTestId("delete-profile-confirm").click();
 
-      // useEnsureActiveProfile re-activates the only remaining profile. Poll
-      // with reload — the delete + activate mutations may take a moment on CI.
-      await expect
-        .poll(
-          async () => {
-            await page.goto("/settings/llm", {
-              waitUntil: "domcontentloaded",
-            });
-            await waitForTestId(page, "add-llm-profile");
-            const remaining = await rowFor(INACTIVE_PROFILE);
-            if (!remaining) return false;
-            // The deleted profile must be gone, and reconciliation must keep
-            // *some* profile active (the "always have an active profile"
-            // guarantee). We don't assert it's INACTIVE_PROFILE specifically —
-            // other profiles may linger on the shared agent-server and
-            // useEnsureActiveProfile activates the first keyed one.
-            const goneRow = await rowFor(ACTIVE_PROFILE);
-            const activeBadges = await page
-              .getByTestId("profile-active-badge")
-              .count();
-            return goneRow === null && activeBadges > 0;
-          },
-          {
-            message: `"${INACTIVE_PROFILE}" should become active after deleting "${ACTIVE_PROFILE}"`,
-            timeout: 15_000,
-            intervals: [1_000, 2_000, 3_000],
-          },
-        )
-        .toBe(true);
+      // Wait for the deleted row to leave the DOM *without* reloading.
+      // A page.goto mid-reconcile aborts useEnsureActiveProfile's activate
+      // mutation (CI tip f992dfaa4 failed 3× with reload-in-poll).
+      await expect(
+        activeRowLocator,
+        `"${ACTIVE_PROFILE}" row should disappear after confirmed delete`,
+      ).toHaveCount(0, { timeout: 30_000 });
+      await expect(
+        inactiveRowLocator,
+        `"${INACTIVE_PROFILE}" should remain after deleting "${ACTIVE_PROFILE}"`,
+      ).toHaveCount(1, { timeout: 10_000 });
+
+      // Reconciliation must keep *some* profile active (the "always have an
+      // active profile" guarantee). Badge updates reactively via query
+      // invalidation — same contract as activateProfileViaUI — so no reload.
+      // We don't assert the badge is on INACTIVE_PROFILE specifically: other
+      // profiles may linger on the shared agent-server and
+      // useEnsureActiveProfile activates the first keyed one.
+      await expect(
+        page.getByTestId("profile-active-badge").first(),
+        `"${INACTIVE_PROFILE}" should become active after deleting "${ACTIVE_PROFILE}"`,
+      ).toBeVisible({ timeout: 30_000 });
     });
   });
 });
