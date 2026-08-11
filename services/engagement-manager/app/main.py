@@ -13,7 +13,7 @@ if str(_SERVICES_ROOT) not in sys.path:
 
 from app.config import get_settings
 from app.db import init_db
-from app.routers import engagements, runtime, scope
+from app.routers import engagements, orchestration, runtime, scope
 
 
 @asynccontextmanager
@@ -37,6 +37,7 @@ app = FastAPI(title="Engagement Manager", version="0.1.0", lifespan=lifespan)
 app.include_router(engagements.router)
 app.include_router(scope.router)
 app.include_router(runtime.router)
+app.include_router(orchestration.router)
 
 
 @app.get("/health")

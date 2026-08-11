@@ -3,8 +3,8 @@
 Engagement Manager — provisionamento e ciclo de vida de sandboxes isolados por engagement.
 
 **ADR:** ADR-0001 (accepted)  
-**Cards:** PROJETOSIN-185 · PROJETOSIN-191 (mobile emulator + MobSF)  
-**Specs:** `docs/specs/fase-0/185-engagement-manager.md` · `docs/specs/fase-2/191-android-emulator-engmgr.md`
+**Cards:** PROJETOSIN-185 · PROJETOSIN-191 (mobile emulator + MobSF) · PROJETOSIN-196 (orchestrator)  
+**Specs:** `docs/specs/fase-0/185-engagement-manager.md` · `docs/specs/fase-2/191-android-emulator-engmgr.md` · `docs/specs/fase-4/196-orchestrator-playbooks.md`
 
 ## Stack
 
@@ -33,6 +33,15 @@ uvicorn app.main:app --reload --port 18003
 - `POST /api/pentest/engagements/{id}/authorize-scope` — registrar RoE + allowlist
 - `POST /api/pentest/engagements/{id}/provision` — provisionar sandbox Docker
 - `POST /api/pentest/engagements/{id}/teardown` — derrubar sandbox (`compose down -v`)
+- `GET /api/pentest/engagements/{id}/orchestration/playbooks` — catálogo MVP (+ merge stub 197)
+- `POST /api/pentest/engagements/{id}/orchestration/runs` — iniciar playbook (`pentest.scan.passive`). Body `{ playbook_id, targets? }`: se `targets` omitido/vazio, o EngMgr **hidrata** a partir das regras `allow` do scope do engagement e persiste em `orchestration_runs.targets` (fail-closed `targets_required` se irresolvível).
+- `GET /api/pentest/engagements/{id}/orchestration/runs/{run_id}` — estado + steps + `targets` persistidos
+- `POST /api/pentest/engagements/{id}/orchestration/runs/{run_id}/advance` — gate confirmation; **revalida** os mesmos `targets` persistidos contra a allowlist antes de `engine_start_phase`
+- `POST /api/pentest/engagements/{id}/orchestration/runs/{run_id}/cancel` — cancelar
+
+Prefixo EngMgr real é `/api/pentest/engagements/.../orchestration` (ingress). Spec 196 usa o shorthand `/api/engagements/.../orchestration`.
+
+Playbooks JSON: `app/playbooks/`. Engine client stub: `app/services/orchestrator/engine_client.py` (contrato `engine_*` da 197).
 
 ## Runtime profiles
 
