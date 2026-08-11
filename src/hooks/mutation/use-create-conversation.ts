@@ -28,6 +28,7 @@ import {
   toPluginCoordinates,
   type WorkspaceMode,
 } from "#/api/conversation-metadata-store";
+import type { PentestAsset } from "#/components/features/pentest/pentest-assets";
 import type {
   AutonomyMode,
   PentestRuntimeProfile,
@@ -58,6 +59,7 @@ export interface CreateConversationVariables {
   engagementId?: string;
   autonomyMode?: AutonomyMode;
   runtimeProfile?: PentestRuntimeProfile;
+  assets?: PentestAsset[];
 }
 
 export const CREATE_CONVERSATION_MUTATION_KEY = ["create-conversation"];
@@ -104,6 +106,7 @@ export const useCreateConversation = () => {
         engagementId,
         autonomyMode,
         runtimeProfile,
+        assets,
       } = variables;
 
       // The active AgentProfile is the default launch profile for new
@@ -125,8 +128,14 @@ export const useCreateConversation = () => {
         // Profiles unavailable → legacy agent_settings launch.
       }
 
+      // Pentest conversations need inline agent_settings so we can attach
+      // stdio MCP servers + the engagement suffix (profile path drops both).
       const requestedAgentProfileId =
-        agentProfileId ?? agentProfiles?.active_agent_profile_id ?? undefined;
+        workspaceType === "pentest"
+          ? undefined
+          : (agentProfileId ??
+            agentProfiles?.active_agent_profile_id ??
+            undefined);
 
       // Fall back to the legacy agent_settings launch when the resolved agent
       // profile can't resolve its LLM. The agent-server seeds a `default`
@@ -315,6 +324,7 @@ export const useCreateConversation = () => {
           engagement_id: engagementId ?? prev?.engagement_id ?? null,
           autonomy_mode: autonomyMode ?? prev?.autonomy_mode ?? null,
           runtime_profile: runtimeProfile ?? prev?.runtime_profile ?? null,
+          pentest_assets: assets ?? prev?.pentest_assets ?? null,
         });
       }
 

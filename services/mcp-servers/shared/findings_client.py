@@ -94,3 +94,32 @@ class FindingsClient:
             raise FindingsAuthError(resp.status_code, resp.text)
 
         raise FindingsClientError(resp.status_code, resp.text)
+
+    async def list_findings(
+        self,
+        *,
+        engagement_id: str,
+        page: int = 1,
+        page_size: int = 50,
+    ) -> dict[str, Any]:
+        try:
+            headers = session_auth_headers()
+        except MissingSessionApiKeyError:
+            raise FindingsAuthError(401, "SESSION_API_KEY missing") from None
+
+        url = f"{self.base_url}{FINDINGS_PATH}"
+        params = {
+            "engagement_id": engagement_id,
+            "page": page,
+            "page_size": page_size,
+        }
+        async with httpx.AsyncClient(
+            transport=self._transport, timeout=self._timeout
+        ) as client:
+            resp = await client.get(url, params=params, headers=headers)
+
+        if resp.status_code == 200:
+            return resp.json()
+        if resp.status_code in (401, 403):
+            raise FindingsAuthError(resp.status_code, resp.text)
+        raise FindingsClientError(resp.status_code, resp.text)

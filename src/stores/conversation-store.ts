@@ -14,7 +14,8 @@ export type ConversationTab =
   | "cloudai"
   | "security"
   | "desktop"
-  | "emulator";
+  | "emulator"
+  | "pentest";
 
 export type ConversationMode = "code" | "plan";
 

@@ -1,5 +1,6 @@
 import { Provider } from "#/types/settings";
 import type { PluginSpec } from "#/api/conversation-service/agent-server-conversation-service.types";
+import type { PentestAsset } from "#/components/features/pentest/pentest-assets";
 import type {
   AutonomyMode,
   PentestRuntimeProfile,
@@ -48,6 +49,8 @@ export interface ConversationMetadata {
   engagement_id?: string | null;
   autonomy_mode?: AutonomyMode | null;
   runtime_profile?: PentestRuntimeProfile | null;
+  /** In-scope pentest assets for this conversation (PROJETOSIN-205). */
+  pentest_assets?: PentestAsset[] | null;
   /** Selected physical ADB serial (PROJETOSIN-194). */
   physical_device_serial?: string | null;
   /** Optional TCP host used with `adb connect` for LAN devices. */
@@ -81,13 +84,41 @@ const readAll = (): StoredMetadata => {
   }
 };
 
+const metadataListeners = new Set<() => void>();
+
+export function subscribeConversationMetadata(
+  onStoreChange: () => void,
+): () => void {
+  metadataListeners.add(onStoreChange);
+  return () => {
+    metadataListeners.delete(onStoreChange);
+  };
+}
+
+function emitMetadataChange(): void {
+  metadataListeners.forEach((listener) => listener());
+}
+
+export function normalizeWorkspacePath(path: string): string {
+  return path.replace(/\\/g, "/").replace(/\/+$/, "");
+}
+
+export function workspacePathsMatch(
+  left: string | null | undefined,
+  right: string | null | undefined,
+): boolean {
+  if (!left || !right) return false;
+  return normalizeWorkspacePath(left) === normalizeWorkspacePath(right);
+}
+
 const writeAll = (next: StoredMetadata): void => {
   if (typeof window === "undefined") return;
   if (Object.keys(next).length === 0) {
     window.localStorage.removeItem(STORAGE_KEY);
-    return;
+  } else {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
   }
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+  emitMetadataChange();
 };
 
 export const getStoredConversationMetadata = (
@@ -111,3 +142,32 @@ export const removeStoredConversationMetadata = (
   delete all[conversationId];
   writeAll(all);
 };
+
+/** Stamp every conversation attached to this folder after a workspace edit. */
+export function syncWorkspaceProfileToConversations(
+  workspacePath: string,
+  patch: {
+    workspaceType: WorkspaceType;
+    engagementId: string | null;
+    autonomyMode: AutonomyMode;
+    assets?: PentestAsset[];
+  },
+): number {
+  const all = readAll();
+  let changed = 0;
+  for (const [id, meta] of Object.entries(all)) {
+    if (!workspacePathsMatch(meta.selected_workspace, workspacePath)) {
+      continue;
+    }
+    all[id] = {
+      ...meta,
+      workspace_type: patch.workspaceType,
+      engagement_id: patch.engagementId,
+      autonomy_mode: patch.autonomyMode,
+      pentest_assets: patch.assets ?? meta.pentest_assets ?? null,
+    };
+    changed += 1;
+  }
+  if (changed > 0) writeAll(all);
+  return changed;
+}

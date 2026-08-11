@@ -11,6 +11,7 @@ import {
 } from "#/stores/conversation-store";
 import { I18nKey } from "#/i18n/declaration";
 import {
+  Crosshair,
   Globe,
   ListTodo,
   Monitor,
@@ -27,6 +28,7 @@ import { useActiveBackend } from "#/contexts/active-backend-context";
 import { useSelectConversationTab } from "#/hooks/use-select-conversation-tab";
 import { useIsArchivedConversation } from "#/hooks/use-is-archived-conversation";
 import { useHasPentestCapability } from "#/hooks/use-pentest-capabilities";
+import { useIsPentestWorkspace } from "#/hooks/use-is-pentest-workspace";
 import { ArchivedDisabledTooltip } from "../../context-menu/archived-disabled-tooltip";
 import { cn } from "#/utils/utils";
 import {
@@ -97,6 +99,7 @@ export function ConversationTabsContextMenu({
   const { backend } = useActiveBackend();
   const isArchivedConversation = useIsArchivedConversation();
   const canUseEmulator = useHasPentestCapability("pentest.mobile.dynamic");
+  const isPentestWorkspace = useIsPentestWorkspace();
 
   const tabConfig = [
     {
@@ -120,6 +123,14 @@ export function ConversationTabsContextMenu({
       tab: "emulator",
       icon: Smartphone,
       i18nKey: I18nKey.COMMON$EMULATOR,
+    });
+  }
+
+  if (isPentestWorkspace) {
+    tabConfig.push({
+      tab: "pentest",
+      icon: Crosshair,
+      i18nKey: I18nKey.COMMON$PENTEST,
     });
   }
 

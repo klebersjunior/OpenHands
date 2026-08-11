@@ -53,6 +53,12 @@ vi.mock("#/routes/security-tab", () => ({
   ),
 }));
 
+vi.mock("#/routes/pentest-tab", () => ({
+  default: () => (
+    <div data-testid="pentest-tab-content">Pentest Tab Content</div>
+  ),
+}));
+
 // Mock ConversationLoading component
 vi.mock("#/components/features/conversation/conversation-loading", () => ({
   ConversationLoading: () => (
@@ -154,6 +160,16 @@ describe("ConversationTabContent", () => {
 
       await waitFor(() => {
         expect(screen.getByTestId("security-tab-content")).toBeInTheDocument();
+      });
+    });
+
+    it("should render pentest tab when selected", async () => {
+      setSelectedTab("pentest");
+
+      render(<ConversationTabContent />, { wrapper: createWrapper() });
+
+      await waitFor(() => {
+        expect(screen.getByTestId("pentest-tab-content")).toBeInTheDocument();
       });
     });
   });

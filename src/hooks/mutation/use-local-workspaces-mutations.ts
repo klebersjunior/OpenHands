@@ -39,6 +39,26 @@ export function useAddWorkspaceParents() {
   });
 }
 
+export function useRenameWorkspace() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      path,
+      name,
+    }: {
+      path: string;
+      name: string;
+    }) => {
+      await WorkspacesService.removeWorkspace(path);
+      return WorkspacesService.addWorkspaces([{ id: path, name, path }]);
+    },
+    onSuccess: () =>
+      queryClient.invalidateQueries({
+        queryKey: LOCAL_WORKSPACES_QUERY_KEYS.all,
+      }),
+  });
+}
+
 export function useRemoveWorkspaceParent() {
   const queryClient = useQueryClient();
   return useMutation({

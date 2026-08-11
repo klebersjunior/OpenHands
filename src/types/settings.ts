@@ -1,6 +1,6 @@
 import type { MCPConfig } from "@openhands/typescript-client";
 export type { MCPConfig } from "@openhands/typescript-client";
-import type { SkillCategoryId } from "@openhands/extensions/skills";
+import type { AppSkillCategoryId } from "#/utils/skill-category";
 import type { GitProviderPreference } from "#/types/git-provider";
 import type { IntegrationsSettings } from "#/types/integrations";
 
@@ -93,7 +93,7 @@ export type SkillInfo = {
    * Topical category from the bundled `@openhands/extensions` catalog.
    * Always absent for user/project skills: the agent-server's `/api/skills` response drops SKILL.md frontmatter metadata, so a local `category` cannot reach us.
    */
-  category?: SkillCategoryId | null;
+  category?: AppSkillCategoryId | null;
   version?: string;
   license?: string | null;
   compatibility?: string | null;

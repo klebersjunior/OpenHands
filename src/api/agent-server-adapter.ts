@@ -1,6 +1,12 @@
 import { ACP_SETTINGS_KEYS } from "@openhands/typescript-client";
 import { ServerClient } from "@openhands/typescript-client/clients";
-import { SKILLS_CATALOG } from "@openhands/extensions/skills";
+import { getBundledSkillsCatalog } from "#/api/pentest/pentest-skills-catalog";
+import {
+  buildPentestMcpConfig,
+  buildPentestSystemSuffix,
+} from "#/api/pentest/pentest-mcp-config";
+import type { PentestAsset } from "#/components/features/pentest/pentest-assets";
+import type { AutonomyMode } from "#/types/workspace-types";
 import { DEFAULT_SETTINGS } from "#/services/settings";
 import { ExecutionStatus } from "#/types/agent-server/core";
 import { AgentKind, Settings, SettingsValue } from "#/types/settings";
@@ -713,7 +719,7 @@ interface BundledSkill {
  * Skills with no triggers get `trigger: null` (always-active / on-demand).
  */
 function buildBundledSkills(): BundledSkill[] {
-  return SKILLS_CATALOG.map((entry) => {
+  return getBundledSkillsCatalog().map((entry) => {
     const trigger: BundledSkill["trigger"] =
       entry.triggers?.length > 0
         ? { type: "keyword", keywords: entry.triggers }
@@ -1060,6 +1066,41 @@ export interface StartConversationOptions {
   agentProfileKind?: AgentKind;
   titleLlmProfile?: string;
   runtimeServicesInfo?: RuntimeServicesInfo | null;
+  pentestLaunch?: {
+    engagementId: string | null;
+    autonomyMode: AutonomyMode;
+    assets: PentestAsset[];
+  };
+}
+
+function applyPentestLaunch(
+  agentSettings: AgentSettingsPayload,
+  pentest: {
+    engagementId: string | null;
+    autonomyMode: AutonomyMode;
+    assets: PentestAsset[];
+  },
+): void {
+  const sessionApiKey = getEffectiveLocalBackend()?.apiKey ?? null;
+  const mcp = buildPentestMcpConfig({
+    assets: pentest.assets,
+    autonomyMode: pentest.autonomyMode,
+    engagementId: pentest.engagementId,
+    sessionApiKey,
+  });
+  const existingMcp = toRecord(agentSettings.mcp_config);
+  agentSettings.mcp_config = { ...existingMcp, ...mcp };
+
+  const suffix = buildPentestSystemSuffix(pentest);
+  const context = toRecord(agentSettings.agent_context);
+  const previous =
+    typeof context.system_message_suffix === "string"
+      ? context.system_message_suffix
+      : "";
+  agentSettings.agent_context = {
+    ...context,
+    system_message_suffix: [previous, suffix].filter(Boolean).join("\n\n"),
+  };
 }
 
 export function buildStartConversationRequest(
@@ -1079,6 +1120,9 @@ export function buildStartConversationRequest(
     sourceAgentSettings,
     options.runtimeServicesInfo,
   );
+  if (options.pentestLaunch && !options.agentProfileId) {
+    applyPentestLaunch(agentSettings, options.pentestLaunch);
+  }
   const acpServerTag = acpMode
     ? getAcpServerTag(sourceAgentSettings)
     : undefined;
@@ -1271,6 +1315,7 @@ export async function buildStartConversationRequestWithEncryptedSettings(options
   agentProfileId?: string;
   agentProfileKind?: AgentKind;
   titleLlmProfile?: string;
+  pentestLaunch?: StartConversationOptions["pentestLaunch"];
 }): Promise<Record<string, unknown>> {
   const { SecretsService } = await import("./secrets-service");
 

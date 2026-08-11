@@ -36,6 +36,14 @@ vi.mock("@openhands/extensions/skills", () => ({
   SKILLS_CATALOG: MOCK_PUBLIC_CATALOG,
 }));
 
+vi.mock("#/api/pentest/pentest-skills-catalog", async () => {
+  const { SKILLS_CATALOG } = await import("@openhands/extensions/skills");
+  return {
+    PENTEST_SKILLS_CATALOG: [],
+    getBundledSkillsCatalog: () => SKILLS_CATALOG,
+  };
+});
+
 import SkillsService from "#/api/skills-service";
 
 const localBackend: Backend = {

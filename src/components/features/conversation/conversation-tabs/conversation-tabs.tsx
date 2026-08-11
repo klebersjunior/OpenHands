@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { LayoutGroup } from "framer-motion";
 import {
   Cloud,
+  Crosshair,
   Globe,
   ListTodo,
   Monitor,
@@ -32,6 +33,7 @@ import { Typography } from "#/ui/typography";
 import { mobileTopBarIconClassName } from "#/utils/mobile-top-bar-icon-button-classes";
 import { useConversationAppwriteIntegration } from "#/hooks/query/use-appwrite-integration";
 import { useHasPentestCapability } from "#/hooks/use-pentest-capabilities";
+import { useIsPentestWorkspace } from "#/hooks/use-is-pentest-workspace";
 
 export function ConversationTabs({
   variant = "default",
@@ -53,6 +55,7 @@ export function ConversationTabs({
   const { backend } = useActiveBackend();
   const { isReady: isCloudAiReady } = useConversationAppwriteIntegration();
   const canUseEmulator = useHasPentestCapability("pentest.mobile.dynamic");
+  const isPentestWorkspace = useIsPentestWorkspace();
 
   const { handleBuildPlanClick } = useHandleBuildPlanClick();
   const { curAgentState } = useAgentState();
@@ -160,6 +163,18 @@ export function ConversationTabs({
       tooltipContent: t(I18nKey.COMMON$EMULATOR),
       tooltipAriaLabel: t(I18nKey.COMMON$EMULATOR),
       label: t(I18nKey.COMMON$EMULATOR),
+    });
+  }
+
+  if (isPentestWorkspace) {
+    tabs.push({
+      tabValue: "pentest",
+      isActive: isTabActive("pentest"),
+      icon: Crosshair,
+      onClick: () => selectTab("pentest"),
+      tooltipContent: t(I18nKey.COMMON$PENTEST),
+      tooltipAriaLabel: t(I18nKey.COMMON$PENTEST),
+      label: t(I18nKey.COMMON$PENTEST),
     });
   }
 
@@ -278,6 +293,7 @@ export function ConversationTabs({
     isRightPanelShown,
     i18n.language,
     canUseEmulator,
+    isPentestWorkspace,
   ]);
 
   const safeInlineTabCount = Math.min(inlineTabCount, visibleTabs.length);

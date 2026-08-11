@@ -65,6 +65,7 @@ const VALID_CONVERSATION_TABS: ReadonlySet<ConversationTab> = new Set([
   "security",
   "desktop",
   "emulator",
+  "pentest",
 ]);
 
 // Tab keys that *used to* exist and were removed during the Files tab

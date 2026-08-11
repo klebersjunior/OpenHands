@@ -22,6 +22,21 @@
 # Override host port / projects path (e.g. Windows when :8000 is taken):
 #   HOST_PORT=8001 PROJECTS_PATH=./projects docker compose up -d
 #
+# Pentest smoke (PROJETOSIN-200): Findings + Engagement Manager are included
+# from services/*/docker-compose.fragment.yml. Same command — no extra `-f`.
+# Requires SESSION_API_KEY (or LOCAL_BACKEND_API_KEY) plus FINDINGS_DB_PASSWORD
+# and ENGMGR_DB_PASSWORD in `.env`. See docker/compose.env.example.
+#   HOST_PORT=9000 docker compose up -d
+#   → GET /api/pentest/me/capabilities via ingress → findings-service
+#
+# Android emulator (budtmo/docker-android, profile android-emulator):
+#   COMPOSE_PROFILES=android-emulator HOST_PORT=9000 docker compose up -d
+#   → ADB 127.0.0.1:5555, noVNC 127.0.0.1:6080, DNS android-emulator inside compose.
+#
+# Offensive runtimes (web / network / sast, profile pentest-runtimes):
+#   COMPOSE_PROFILES=android-emulator,pentest-runtimes HOST_PORT=9000 docker compose up -d --build
+#   → runtime-web :8090/:8080, runtime-network :8091/:55553, runtime-sast :8094 (loopback).
+#
 # Copy settings from docker/compose.env.example into `.env` (Compose loads it
 # automatically) or pass `--env-file docker/compose.env.example`.
 #
@@ -31,6 +46,15 @@
 #   # on the other host:
 #   gunzip -c agent-canvas-local.tar.gz | docker load
 #   AGENT_CANVAS_IMAGE=agent-canvas:local docker compose up -d
+
+# Sibling pentest services (B): Postgres + apps on the compose network.
+# agent-canvas reaches them via FINDINGS_UPSTREAM / ENGMGR_UPSTREAM (Docker DNS),
+# not 127.0.0.1 — those ports are not inside the canvas container.
+include:
+  - path: services/findings-service/docker-compose.fragment.yml
+  - path: services/engagement-manager/docker-compose.fragment.yml
+  - path: docker/runtimes/mobile/compose.android-emulator.fragment.yml
+  - path: docker/runtimes/compose.pentest-runtimes.fragment.yml
 
 services:
   agent-canvas:
@@ -61,9 +85,28 @@ services:
       PORT: "8000"
       # Optional: pin keys so restarts / machines share the same credentials.
       # Leave unset to auto-generate and persist under the openhands-data volume.
-      LOCAL_BACKEND_API_KEY: ${LOCAL_BACKEND_API_KEY:-}
+      # When SESSION_API_KEY is set (required by Findings/EngMgr), share it.
+      LOCAL_BACKEND_API_KEY: ${SESSION_API_KEY:-${LOCAL_BACKEND_API_KEY:-}}
       OH_SECRET_KEY: ${OH_SECRET_KEY:-}
-      OH_SESSION_API_KEYS_0: ${OH_SESSION_API_KEYS_0:-}
+      OH_SESSION_API_KEYS_0: ${SESSION_API_KEY:-${OH_SESSION_API_KEYS_0:-${LOCAL_BACKEND_API_KEY:-}}}
+      # Sibling pentest upstreams (Docker DNS). Defaults match compose service names.
+      FINDINGS_UPSTREAM: ${FINDINGS_UPSTREAM:-http://findings-service:8000}
+      FINDINGS_SERVICE_URL: ${FINDINGS_SERVICE_URL:-http://findings-service:8000}
+      SESSION_API_KEY: ${SESSION_API_KEY:-${LOCAL_BACKEND_API_KEY:-}}
+      PENTEST_MCP_ROOT: /opt/mcp-servers
+      ADB_HOST: ${ADB_HOST:-android-emulator}
+      ADB_PORT: ${ADB_PORT:-5555}
+      PENTEST_ADB_TARGET: ${PENTEST_ADB_TARGET:-emulator}
+      EMULATOR_NOVNC_URL: ${EMULATOR_NOVNC_URL:-http://android-emulator:6080}
+      ZAP_URL: ${ZAP_URL:-http://runtime-web:8080}
+      RUNTIME_WEB_URL: ${RUNTIME_WEB_URL:-http://runtime-web:8090}
+      RUNTIME_NETWORK_URL: ${RUNTIME_NETWORK_URL:-http://runtime-network:8091}
+      RUNTIME_SAST_URL: ${RUNTIME_SAST_URL:-http://runtime-sast:8094}
+      MSF_RPC_HOST: ${MSF_RPC_HOST:-runtime-network}
+      MSF_RPC_PORT: ${MSF_RPC_PORT:-55553}
+      MSF_PASSWORD: ${MSF_PASSWORD:-}
+      ENGMGR_UPSTREAM: ${ENGMGR_UPSTREAM:-http://engagement-manager:8000}
+      DEFAULT_PENTEST_PROFILE: ${DEFAULT_PENTEST_PROFILE:-pentester}
       # Internal username/password gate (opt-in; compose defaults to on).
       APP_LOGIN_ENABLED: ${APP_LOGIN_ENABLED:-true}
       # Optional LLM credentials (can also be configured in the UI).
@@ -85,6 +128,13 @@ services:
       - openhands-data:/home/openhands/.openhands
       # Host projects the agent can read/edit. Create the folder before first run.
       - ${PROJECTS_PATH:-./projects}:/projects
+      # Pentest stdio MCP servers (recon/webscan/sast/mobile/findings).
+      - ./services/mcp-servers:/opt/mcp-servers:ro
+    depends_on:
+      findings-service:
+        condition: service_healthy
+      engagement-manager:
+        condition: service_healthy
     restart: unless-stopped
     healthcheck:
       test:

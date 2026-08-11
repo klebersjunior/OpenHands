@@ -15,6 +15,7 @@ import { cn } from "#/utils/utils";
 import { modalTitleSmClassName } from "#/utils/modal-classes";
 import FolderIcon from "#/icons/folder.svg?react";
 import CloseIcon from "#/icons/close.svg?react";
+import { WorkspaceEditForm } from "./workspace-edit-form";
 
 interface ManageWorkspacesModalProps {
   isOpen: boolean;
@@ -40,6 +41,12 @@ export function ManageWorkspacesModal({
   const { t } = useTranslation("openhands");
   const [pendingRemoval, setPendingRemoval] =
     React.useState<PendingRemoval | null>(null);
+  const [editingWorkspace, setEditingWorkspace] =
+    React.useState<LocalWorkspace | null>(null);
+
+  React.useEffect(() => {
+    if (!isOpen) setEditingWorkspace(null);
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -85,10 +92,24 @@ export function ManageWorkspacesModal({
           <div className="flex items-center justify-between px-5 py-3 border-b border-[var(--oh-border-input)]">
             <BaseModalTitle
               className={modalTitleSmClassName}
-              title={t(I18nKey.HOME$MANAGE_WORKSPACES)}
+              title={
+                editingWorkspace
+                  ? t(I18nKey.HOME$EDIT_WORKSPACE_TITLE, {
+                      name: editingWorkspace.name,
+                    })
+                  : t(I18nKey.HOME$MANAGE_WORKSPACES)
+              }
             />
           </div>
 
+          {editingWorkspace ? (
+            <div className="flex-1 overflow-auto custom-scrollbar-always">
+              <WorkspaceEditForm
+                workspace={editingWorkspace}
+                onClose={() => setEditingWorkspace(null)}
+              />
+            </div>
+          ) : (
           <div
             className="flex-1 overflow-auto custom-scrollbar-always"
             data-testid="manage-workspaces-list"
@@ -116,6 +137,15 @@ export function ManageWorkspacesModal({
                         {workspace.path}
                       </span>
                     </div>
+                    <button
+                      type="button"
+                      onClick={() => setEditingWorkspace(workspace)}
+                      aria-label={t(I18nKey.HOME$EDIT_WORKSPACE)}
+                      data-testid={`manage-workspaces-edit-${workspace.name}`}
+                      className="flex items-center gap-1 px-2 py-1 rounded text-xs text-[var(--oh-text-tertiary)] hover:bg-[var(--oh-interactive-hover)] hover:text-white cursor-pointer"
+                    >
+                      <span>{t(I18nKey.HOME$EDIT_WORKSPACE)}</span>
+                    </button>
                     <button
                       type="button"
                       onClick={() =>
@@ -223,6 +253,9 @@ export function ManageWorkspacesModal({
             )}
           </div>
 
+          )}
+
+          {!editingWorkspace && (
           <div className="flex justify-end gap-2 px-5 py-3 border-t border-[var(--oh-border-input)]">
             <BrandButton
               type="button"
@@ -233,6 +266,7 @@ export function ManageWorkspacesModal({
               {t(I18nKey.HOME$DONE)}
             </BrandButton>
           </div>
+          )}
         </div>
       </ModalBackdrop>
 

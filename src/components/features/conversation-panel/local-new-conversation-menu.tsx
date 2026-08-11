@@ -23,7 +23,9 @@ import {
 import { getWorkspacesUnsupportedMessage } from "#/utils/workspaces-compatibility";
 import RepoIcon from "#/icons/repo.svg?react";
 import type { AutonomyMode, WorkspaceType } from "#/types/workspace-types";
+import type { PentestAsset } from "#/components/features/pentest/pentest-assets";
 
+import { loadWorkspaceBundle } from "#/components/features/home/workspace-dropdown/workspace-profile";
 import { FolderBrowserModal } from "#/components/features/home/workspace-dropdown/folder-browser-modal";
 import { ManageWorkspacesModal } from "#/components/features/home/workspace-dropdown/manage-workspaces-modal";
 import { WorkspaceTypeSelector } from "#/components/features/pentest/workspace-type-selector";
@@ -101,6 +103,7 @@ export function LocalNewConversationMenu({
   const [engagementId, setEngagementId] = React.useState<string | null>(null);
   const [autonomyMode, setAutonomyMode] =
     React.useState<AutonomyMode>("semi_autonomous");
+  const [assets, setAssets] = React.useState<PentestAsset[]>([]);
   const { engagements, isLoading: isLoadingEngagements } =
     usePentestEngagements();
 
@@ -108,11 +111,11 @@ export function LocalNewConversationMenu({
   const isCreatingElsewhere = useIsCreatingConversation();
   const isCreating = isPending || isCreatingElsewhere;
 
-  const pentestState = { workspaceType, engagementId, autonomyMode };
+  const pentestState = { workspaceType, engagementId, autonomyMode, assets };
   const pentestBlocked = isPentestCreationBlocked(pentestState, engagements);
   const scopeUnauthorized = hasUnauthorizedScope(pentestState, engagements);
   const scopeError = scopeUnauthorized
-    ? t(I18nKey.WORKSPACE_TYPE$SCOPE_UNAUTHORIZED)
+    ? t(I18nKey.WORKSPACE_TYPE$SCOPE_NEEDS_ASSETS)
     : null;
 
   const handleWorkspaceTypeChange = React.useCallback((type: WorkspaceType) => {
@@ -120,6 +123,7 @@ export function LocalNewConversationMenu({
     setAutonomyMode("semi_autonomous");
     if (type === "code") {
       setEngagementId(null);
+      setAssets([]);
     }
   }, []);
 
@@ -148,18 +152,41 @@ export function LocalNewConversationMenu({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [open, browserOpen, manageOpen]);
 
-  const launch = (workingDir?: string) => {
-    if (isCreating || pentestBlocked) return;
+  const launch = async (workingDir?: string) => {
+    if (isCreating) return;
+    let nextType = workspaceType;
+    let nextEngagementId = engagementId;
+    let nextAutonomy = autonomyMode;
+    let nextAssets = assets;
+    if (workingDir) {
+      try {
+        const bundle = await loadWorkspaceBundle(workingDir);
+        nextType = bundle.profile.workspaceType;
+        nextEngagementId = bundle.profile.engagementId;
+        nextAutonomy = bundle.profile.autonomyMode;
+        nextAssets = bundle.profile.assets;
+      } catch {
+        // Fall back to the menu selector when the folder has no profile yet.
+      }
+    }
+    const nextState = {
+      workspaceType: nextType,
+      engagementId: nextEngagementId,
+      autonomyMode: nextAutonomy,
+      assets: nextAssets,
+    };
+    if (isPentestCreationBlocked(nextState, engagements)) return;
     createConversation(
       {
         workingDir,
         entryPoint: "sidebar_local_menu",
-        workspaceType,
-        ...(workspaceType === "pentest" && engagementId
+        workspaceType: nextType,
+        ...(nextType === "pentest" && nextEngagementId
           ? {
-              engagementId,
-              autonomyMode,
+              engagementId: nextEngagementId,
+              autonomyMode: nextAutonomy,
               runtimeProfile: "web" as const,
+              assets: nextAssets,
             }
           : {}),
       },
@@ -262,6 +289,8 @@ export function LocalNewConversationMenu({
                 onEngagementChange={setEngagementId}
                 autonomyMode={autonomyMode}
                 onAutonomyChange={setAutonomyMode}
+                assets={assets}
+                onAssetsChange={setAssets}
                 scopeError={scopeError}
               />
             )}

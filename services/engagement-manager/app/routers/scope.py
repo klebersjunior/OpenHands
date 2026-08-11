@@ -57,7 +57,7 @@ async def authorize_scope(
     engagement_id: uuid.UUID,
     payload: AuthorizeScopeRequest,
     db: AsyncSession = Depends(get_db),
-    ctx: AuthContext = require_capability("pentest.admin.scope"),
+    ctx: AuthContext = require_capability("pentest.engagement.create"),
 ):
     eng = await EngagementService(db).authorize_scope(
         engagement_id, payload, user_id=ctx.user_id

@@ -1,15 +1,18 @@
 import { SkillsClient } from "@openhands/typescript-client/clients";
 import {
-  SKILLS_CATALOG,
-  type SkillCatalogEntry,
-} from "@openhands/extensions/skills";
+  getBundledSkillsCatalog,
+  type PentestSkillCatalogEntry,
+} from "#/api/pentest/pentest-skills-catalog";
+import type { SkillCatalogEntry } from "@openhands/extensions/skills";
 import { SkillInfo } from "#/types/settings";
 import { getAgentServerWorkingDir } from "./agent-server-config";
 import { getActiveBackend } from "./backend-registry/active-store";
 import { fetchCloudSkills } from "./cloud/skills-service.api";
 import { getAgentServerClientOptions } from "./agent-server-client-options";
 
-function catalogEntryToSkillInfo(entry: SkillCatalogEntry): SkillInfo {
+function catalogEntryToSkillInfo(
+  entry: SkillCatalogEntry | PentestSkillCatalogEntry,
+): SkillInfo {
   return {
     name: entry.name,
     type: "knowledge",
@@ -24,14 +27,16 @@ function catalogEntryToSkillInfo(entry: SkillCatalogEntry): SkillInfo {
 }
 
 /**
- * Public skills loaded from the `@openhands/extensions` npm package.
+ * Public skills: `@openhands/extensions` catalog plus Heimdall pentest skills.
  *
  * This is an **immutable build-time snapshot**: the catalog is baked into the
  * bundle at `npm run build` / `vite build` time and does not change at
  * runtime. Updating the catalog requires bumping the `@openhands/extensions`
  * dependency and rebuilding.
  */
-const PUBLIC_SKILLS: SkillInfo[] = SKILLS_CATALOG.map(catalogEntryToSkillInfo);
+const PUBLIC_SKILLS: SkillInfo[] = getBundledSkillsCatalog().map(
+  catalogEntryToSkillInfo,
+);
 
 class SkillsService {
   static async getSkills(projectDir?: string): Promise<SkillInfo[]> {

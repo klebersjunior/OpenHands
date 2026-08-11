@@ -139,10 +139,12 @@ describe("createAppLoginStore + handler", () => {
 
     const me = await request("GET", `${APP_LOGIN_PATH_PREFIX}/me`, { cookie });
     expect(me.status).toBe(200);
-    expect(me.json).toEqual({
+    expect(me.json).toMatchObject({
       authenticated: true,
       username: DEFAULT_APP_LOGIN_USERNAME,
+      groupId: "admin",
     });
+    expect(me.json.permissions).toContain("app.users.manage");
   });
 
   it("rejects invalid credentials", async () => {
@@ -166,15 +168,61 @@ describe("createAppLoginStore + handler", () => {
       body: { username: "alice", password: "secret1" },
     });
     expect(created.status).toBe(201);
-    expect(created.json).toEqual({ username: "alice" });
+    expect(created.json).toMatchObject({
+      username: "alice",
+      groupId: "pentester",
+    });
 
     const listed = await request("GET", `${APP_LOGIN_PATH_PREFIX}/users`, {
       cookie,
     });
     expect(listed.status).toBe(200);
-    expect(listed.json).toEqual({
-      users: [{ username: "alice" }, { username: DEFAULT_APP_LOGIN_USERNAME }],
+    const users = listed.json.users as Array<{ username: string }>;
+    expect(users.map((u) => u.username).sort()).toEqual([
+      "alice",
+      DEFAULT_APP_LOGIN_USERNAME,
+    ]);
+  });
+
+  it("assigns groups and creates a custom permission set", async () => {
+    const login = await request("POST", `${APP_LOGIN_PATH_PREFIX}/login`, {
+      body: {
+        username: DEFAULT_APP_LOGIN_USERNAME,
+        password: DEFAULT_APP_LOGIN_PASSWORD,
+      },
     });
+    const cookie = sessionCookieFrom(login.setCookie);
+
+    const group = await request("POST", `${APP_LOGIN_PATH_PREFIX}/groups`, {
+      cookie,
+      body: {
+        name: "Reviewers",
+        permissions: ["pentest.findings.view", "pentest.engagement.view"],
+      },
+    });
+    expect(group.status).toBe(201);
+    expect(group.json).toMatchObject({
+      name: "Reviewers",
+      builtin: false,
+    });
+
+    const created = await request("POST", `${APP_LOGIN_PATH_PREFIX}/users`, {
+      cookie,
+      body: {
+        username: "dana",
+        password: "secret1",
+        groupId: (group.json as { id: string }).id,
+      },
+    });
+    expect(created.status).toBe(201);
+    expect(created.json).toMatchObject({
+      username: "dana",
+      groupName: "Reviewers",
+    });
+    expect(created.json.permissions).toEqual([
+      "pentest.findings.view",
+      "pentest.engagement.view",
+    ]);
   });
 
   it("deletes a user but refuses to delete the last one", async () => {

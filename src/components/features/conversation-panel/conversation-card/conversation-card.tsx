@@ -16,7 +16,10 @@ import { ConversationCardActions } from "./conversation-card-actions";
 import { ConversationCardFooter } from "./conversation-card-footer";
 import { ConversationStatusBadges } from "./conversation-status-badges";
 import { WorkspaceTypeBadge } from "#/components/features/pentest/workspace-type-badge";
-import { getStoredConversationMetadata } from "#/api/conversation-metadata-store";
+import {
+  getStoredConversationMetadata,
+  subscribeConversationMetadata,
+} from "#/api/conversation-metadata-store";
 import { useDownloadConversation } from "#/hooks/use-download-conversation";
 
 interface ConversationCardProps {
@@ -82,9 +85,15 @@ export function ConversationCard({
   const { trackDownloadVsCodeButtonClicked } = useTracking();
   const [titleMode, setTitleMode] = React.useState<"view" | "edit">("view");
   const { mutateAsync: downloadConversation } = useDownloadConversation();
-  const isPentestWorkspace =
-    conversationId != null &&
-    getStoredConversationMetadata(conversationId)?.workspace_type === "pentest";
+  const storedWorkspaceType = React.useSyncExternalStore(
+    subscribeConversationMetadata,
+    () =>
+      conversationId
+        ? (getStoredConversationMetadata(conversationId)?.workspace_type ?? "")
+        : "",
+    () => "",
+  );
+  const isPentestWorkspace = storedWorkspaceType === "pentest";
 
   const onTitleSave = (newTitle: string) => {
     if (newTitle !== "" && newTitle !== title) {

@@ -8,7 +8,8 @@ services/mcp-servers/
 ├── mcp-recon/       # subfinder / httpx / reconftw
 ├── mcp-webscan/     # ZAP / Nuclei / Wapiti / Nikto / sqlmap
 ├── mcp-sast/        # Semgrep + Trivy (PROJETOSIN-189)
-└── mcp-mobile/      # MobSF + ADB/Frida/apktool/jadx (PROJETOSIN-190)
+├── mcp-mobile/      # MobSF + ADB/Frida/apktool/jadx (PROJETOSIN-190)
+└── mcp-findings/    # list/create findings in Findings Service (PROJETOSIN-205)
 ```
 
 ## Capabilities
@@ -20,6 +21,7 @@ services/mcp-servers/
 | webscan active (`web_zap_active_scan`, `web_sqlmap_run`, nuclei intrusive) | `pentest.scan.active` |
 | `mcp-sast` (Semgrep / Trivy) | `pentest.sast.run` |
 | `mcp-mobile` (MobSF / ADB / Frida / apktool / jadx) | `pentest.mobile.dynamic` |
+| `mcp-findings` (list / create) | `pentest.findings.view` / `pentest.scan.passive` |
 
 Session registration should only attach a server when the authenticated profile
 has the minimum capability (Fase 0 RBAC). Without `pentest.mobile.dynamic`, the
@@ -79,8 +81,9 @@ python services/mcp-servers/mcp-mobile/server.py
 
 ## Register with Agent Canvas / Agent Server
 
-Until workspace-type hooks auto-register MCP for `pentest` workspaces, set
-stdio commands via settings / MCP API or env:
+Pentest conversations auto-attach these stdio servers (PROJETOSIN-205) with
+`PENTEST_SCOPE_ALLOWLIST` from workspace assets. Compose mounts this tree at
+`/opt/mcp-servers`. Manual override:
 
 ```bash
 PENTEST_MCP_RECON_CMD='python /opt/mcp-servers/mcp-recon/server.py'

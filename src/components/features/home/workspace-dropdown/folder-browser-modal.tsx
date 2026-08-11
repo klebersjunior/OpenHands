@@ -20,6 +20,7 @@ import {
 import { useActiveBackend } from "#/contexts/active-backend-context";
 import { useSettings } from "#/hooks/query/use-settings";
 import { useCloneRepository } from "#/hooks/mutation/use-clone-repository";
+import { useCreateHostDirectory } from "#/hooks/mutation/use-create-host-directory";
 import { isSdkHttpStatusError } from "#/api/agent-server-compatibility";
 import {
   displayErrorToast,
@@ -30,6 +31,14 @@ import { cn } from "#/utils/utils";
 import { modalTitleSmClassName } from "#/utils/modal-classes";
 import FolderIcon from "#/icons/folder.svg?react";
 import ChevronLeft from "#/icons/chevron-left-small.svg?react";
+import PlusIcon from "#/icons/u-plus.svg?react";
+import {
+  getParentPath,
+  isValidWorkspaceFolderName,
+  isWindowsDriveRoot,
+  joinBrowsePath,
+  trimTrailingSeparators,
+} from "./folder-browser-paths";
 
 const PROJECTS_PATH = "/projects";
 const NONE_PROVIDER_KEY = "__none__";
@@ -92,35 +101,6 @@ function SidebarSection({
   );
 }
 
-function getParentPath(path: string): string | null {
-  const trimmed = trimTrailingSeparators(path);
-  if (!trimmed || trimmed === "/" || isWindowsDriveRoot(trimmed)) return null;
-
-  const idx = Math.max(trimmed.lastIndexOf("/"), trimmed.lastIndexOf("\\"));
-  if (idx < 0) return null;
-  if (idx === 0) return "/";
-
-  const parent = trimmed.slice(0, idx);
-  if (/^[A-Za-z]:$/.test(parent)) {
-    return `${parent}${trimmed[idx]}`;
-  }
-
-  return parent;
-}
-
-function isWindowsDriveRoot(path: string): boolean {
-  return /^[A-Za-z]:[\\/]?$/.test(path);
-}
-
-function trimTrailingSeparators(path: string): string {
-  const trimmed = path.replace(/[\\/]+$/, "");
-  if (/^[A-Za-z]:$/.test(trimmed)) {
-    const separator = path.includes("/") && !path.includes("\\") ? "/" : "\\";
-    return `${trimmed}${separator}`;
-  }
-  return trimmed;
-}
-
 function shouldDefaultToProjectsPath(
   homeData: HomeDirectoryResponse | undefined,
 ): boolean {
@@ -149,6 +129,8 @@ export function FolderBrowserModal({
   const [mode, setMode] = useState<BrowserMode>("browse");
   const [cloneUrl, setCloneUrl] = useState("");
   const [providerId, setProviderId] = useState<string>(NONE_PROVIDER_KEY);
+  const [isCreatingFolder, setIsCreatingFolder] = useState(false);
+  const [newFolderName, setNewFolderName] = useState("");
   const active = useActiveBackend();
   const isLocalBackend = active.backend.kind === "local";
 
@@ -156,6 +138,8 @@ export function FolderBrowserModal({
   const { data: settings } = useSettings();
   const { mutate: cloneRepository, isPending: isCloning } =
     useCloneRepository();
+  const { mutate: createDirectory, isPending: isCreatingDirectory } =
+    useCreateHostDirectory();
 
   const preferredBrowsePath = settings?.default_workspace_browse_path;
   const gitProviders = settings?.git_providers ?? [];
@@ -170,6 +154,8 @@ export function FolderBrowserModal({
       setMode("browse");
       setCloneUrl("");
       setProviderId(NONE_PROVIDER_KEY);
+      setIsCreatingFolder(false);
+      setNewFolderName("");
     }
   }, [isOpen, homeData?.home, preferredBrowsePath, currentPath]);
 
@@ -185,6 +171,17 @@ export function FolderBrowserModal({
     isError,
     error,
   } = useSearchSubdirs(isOpen && mode === "browse" ? currentPath : null);
+
+  // A previous mkdir bug wrote the folder name as a file. Leave that path
+  // so the listing can recover instead of staying on 400 forever.
+  useEffect(() => {
+    if (!isOpen || !isError || !currentPath) return;
+    if (!isNotADirectoryBrowseError(error)) return;
+    const parentPath = getParentPath(currentPath);
+    if (!parentPath) return;
+    displayErrorToast(t(I18nKey.HOME$PATH_NOT_A_DIRECTORY));
+    setCurrentPath(parentPath);
+  }, [isOpen, isError, error, currentPath, t]);
 
   const favorites: SidebarEntry[] = useMemo(() => {
     if (!homeData?.home) return [];
@@ -274,6 +271,44 @@ export function FolderBrowserModal({
       },
     ]);
     onClose();
+  };
+
+  const resetNewFolderForm = () => {
+    setIsCreatingFolder(false);
+    setNewFolderName("");
+  };
+
+  const handleCreateFolder = () => {
+    if (!currentPath || isCreatingDirectory) return;
+    const name = newFolderName.trim();
+    if (!isValidWorkspaceFolderName(name)) {
+      displayErrorToast(t(I18nKey.HOME$NEW_FOLDER_INVALID_NAME));
+      return;
+    }
+    const destination = joinBrowsePath(currentPath, name);
+    if (subdirs.some((entry) => entry.path === destination)) {
+      displayErrorToast(t(I18nKey.HOME$NEW_FOLDER_EXISTS));
+      return;
+    }
+
+    createDirectory(
+      { parentPath: currentPath, name },
+      {
+        onSuccess: (createdPath) => {
+          displaySuccessToast(
+            t(I18nKey.HOME$NEW_FOLDER_SUCCESS, { name }),
+          );
+          resetNewFolderForm();
+          setCurrentPath(createdPath);
+        },
+        onError: (createError) => {
+          displayErrorToast(
+            retrieveAxiosErrorMessage(createError) ||
+              t(I18nKey.HOME$NEW_FOLDER_FAILED),
+          );
+        },
+      },
+    );
   };
 
   const resolveCloneParentPath = (): string | null => {
@@ -460,11 +495,31 @@ export function FolderBrowserModal({
                     <ChevronLeft width={16} height={16} />
                   </button>
                   <span
-                    className="text-xs text-[var(--oh-muted)] truncate"
+                    className="text-xs text-[var(--oh-muted)] truncate min-w-0 flex-1"
                     data-testid="folder-browser-current-path"
                   >
                     {currentPath ?? ""}
                   </span>
+                  <BrandButton
+                    type="button"
+                    variant="secondary"
+                    testId="folder-browser-new-folder"
+                    ariaLabel={t(I18nKey.HOME$NEW_FOLDER)}
+                    isDisabled={
+                      !currentPath ||
+                      isLoading ||
+                      isError ||
+                      isCreatingDirectory
+                    }
+                    onClick={() => {
+                      setIsCreatingFolder(true);
+                      setNewFolderName("");
+                    }}
+                    startContent={<PlusIcon width={12} height={12} />}
+                    className="shrink-0 px-2 py-1 text-xs"
+                  >
+                    {t(I18nKey.HOME$NEW_FOLDER)}
+                  </BrandButton>
                 </div>
 
                 <div className="grid grid-cols-[1fr_120px] px-4 py-1 border-b border-[var(--oh-border-input)] text-xs text-[var(--oh-text-secondary)] font-semibold">
@@ -476,6 +531,53 @@ export function FolderBrowserModal({
                   className="flex-1 overflow-auto custom-scrollbar-always"
                   data-testid="folder-browser-list"
                 >
+                  {isCreatingFolder && (
+                    <li className="flex items-center gap-2 px-4 py-2 border-b border-[var(--oh-border-input)]">
+                      <FolderIcon
+                        width={16}
+                        height={16}
+                        className="shrink-0 text-white"
+                      />
+                      <input
+                        data-testid="folder-browser-new-folder-input"
+                        value={newFolderName}
+                        onChange={(event) =>
+                          setNewFolderName(event.target.value)
+                        }
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            event.preventDefault();
+                            handleCreateFolder();
+                          }
+                          if (event.key === "Escape") {
+                            event.preventDefault();
+                            resetNewFolderForm();
+                          }
+                        }}
+                        placeholder={t(
+                          I18nKey.HOME$NEW_FOLDER_NAME_PLACEHOLDER,
+                        )}
+                        aria-label={t(
+                          I18nKey.HOME$NEW_FOLDER_NAME_PLACEHOLDER,
+                        )}
+                        autoFocus
+                        disabled={isCreatingDirectory}
+                        className="min-w-0 flex-1 rounded-md border border-[var(--oh-border)] bg-[var(--oh-surface)] px-2 py-1 text-sm text-white placeholder:text-[var(--oh-muted)]"
+                      />
+                      <BrandButton
+                        type="button"
+                        variant="primary"
+                        testId="folder-browser-new-folder-submit"
+                        onClick={handleCreateFolder}
+                        isDisabled={
+                          isCreatingDirectory || !newFolderName.trim()
+                        }
+                        className="shrink-0 px-2 py-1 text-xs"
+                      >
+                        {t(I18nKey.HOME$NEW_FOLDER_CREATE)}
+                      </BrandButton>
+                    </li>
+                  )}
                   {isLoading && (
                     <li className="px-4 py-2 text-sm text-[var(--oh-text-secondary)]">
                       {t(I18nKey.HOME$LOADING)}
@@ -490,7 +592,10 @@ export function FolderBrowserModal({
                         t(I18nKey.COMMON$FAILED_TO_LOAD)}
                     </li>
                   )}
-                  {!isLoading && !isError && subdirs.length === 0 && (
+                  {!isLoading &&
+                    !isError &&
+                    subdirs.length === 0 &&
+                    !isCreatingFolder && (
                     <li
                       className="px-4 py-2 text-sm text-[var(--oh-text-secondary)]"
                       data-testid={
@@ -565,6 +670,15 @@ export function FolderBrowserModal({
       </div>
     </ModalBackdrop>
   );
+}
+
+export function isNotADirectoryBrowseError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const message =
+    "message" in error && typeof error.message === "string"
+      ? error.message
+      : "";
+  return message.includes("Path is not a directory");
 }
 
 /** @internal Exported for unit tests */

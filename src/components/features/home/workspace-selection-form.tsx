@@ -12,9 +12,13 @@ import {
 } from "#/hooks/mutation/use-local-workspaces-mutations";
 import { useLocalWorkspaces } from "#/hooks/query/use-local-workspaces";
 import { useResolvedWorkspaces } from "#/hooks/query/use-resolved-workspaces";
+import { useWorkspaceProfile } from "#/hooks/query/use-workspace-profile";
 import { usePentestEngagements } from "#/hooks/use-pentest-capabilities";
 import { LocalWorkspace } from "#/types/workspace";
 import type { AutonomyMode, WorkspaceType } from "#/types/workspace-types";
+import type { PentestAsset } from "#/components/features/pentest/pentest-assets";
+import { useSaveWorkspaceBundle } from "#/hooks/mutation/use-save-workspace-bundle";
+import { syncPentestWorkspaceScope } from "#/api/pentest/sync-pentest-scope";
 import { I18nKey } from "#/i18n/declaration";
 import FolderIcon from "#/icons/folder.svg?react";
 import { getWorkspacesUnsupportedMessage } from "#/utils/workspaces-compatibility";
@@ -106,8 +110,10 @@ export function WorkspaceSelectionForm({
   const [engagementId, setEngagementId] = React.useState<string | null>(null);
   const [autonomyMode, setAutonomyMode] =
     React.useState<AutonomyMode>("semi_autonomous");
+  const [assets, setAssets] = React.useState<PentestAsset[]>([]);
   const { engagements, isLoading: isLoadingEngagements } =
     usePentestEngagements();
+  const { mutateAsync: saveBundle } = useSaveWorkspaceBundle();
 
   const {
     mutate: createConversation,
@@ -118,11 +124,11 @@ export function WorkspaceSelectionForm({
   const isCreatingConversation =
     isPending || isSuccess || isCreatingConversationElsewhere;
 
-  const pentestState = { workspaceType, engagementId, autonomyMode };
+  const pentestState = { workspaceType, engagementId, autonomyMode, assets };
   const pentestBlocked = isPentestCreationBlocked(pentestState, engagements);
   const scopeUnauthorized = hasUnauthorizedScope(pentestState, engagements);
   const scopeError = scopeUnauthorized
-    ? t(I18nKey.WORKSPACE_TYPE$SCOPE_UNAUTHORIZED)
+    ? t(I18nKey.WORKSPACE_TYPE$SCOPE_NEEDS_ASSETS)
     : null;
 
   const handleWorkspaceTypeChange = React.useCallback((type: WorkspaceType) => {
@@ -130,6 +136,7 @@ export function WorkspaceSelectionForm({
     setAutonomyMode("semi_autonomous");
     if (type === "code") {
       setEngagementId(null);
+      setAssets([]);
     }
   }, []);
 
@@ -140,6 +147,18 @@ export function WorkspaceSelectionForm({
     },
     [],
   );
+
+  const { data: selectedProfile } = useWorkspaceProfile(
+    selectedWorkspace?.path ?? null,
+  );
+
+  React.useEffect(() => {
+    if (!selectedProfile) return;
+    setWorkspaceType(selectedProfile.profile.workspaceType);
+    setEngagementId(selectedProfile.profile.engagementId);
+    setAutonomyMode(selectedProfile.profile.autonomyMode);
+    setAssets(selectedProfile.profile.assets);
+  }, [selectedProfile, selectedWorkspace?.path]);
 
   React.useEffect(() => {
     const storedPath = getStoredSelectedWorkspacePath();
@@ -192,23 +211,50 @@ export function WorkspaceSelectionForm({
       onConfirm(selectedWorkspace);
       return;
     }
-    createConversation(
-      {
-        workingDir: selectedWorkspace.path,
-        entryPoint: "home_workspace_form",
-        workspaceType,
-        ...(workspaceType === "pentest" && engagementId
-          ? {
-              engagementId,
-              autonomyMode,
-              runtimeProfile: "web" as const,
-            }
-          : {}),
+    const startConversation = () => {
+      createConversation(
+        {
+          workingDir: selectedWorkspace.path,
+          entryPoint: "home_workspace_form",
+          workspaceType,
+          ...(workspaceType === "pentest" && engagementId
+            ? {
+                engagementId,
+                autonomyMode,
+                runtimeProfile: "web" as const,
+                assets,
+              }
+            : {}),
+        },
+        {
+          onSuccess: (data) =>
+            navigate(`/conversations/${data.conversation_id}`),
+        },
+      );
+    };
+    if (workspaceType !== "pentest") {
+      startConversation();
+      return;
+    }
+    void saveBundle({
+      workspacePath: selectedWorkspace.path,
+      bundle: {
+        profile: { workspaceType, engagementId, autonomyMode, assets },
+        envVars: selectedProfile?.envVars ?? [],
       },
-      {
-        onSuccess: (data) => navigate(`/conversations/${data.conversation_id}`),
-      },
-    );
+    })
+      .then(() =>
+        syncPentestWorkspaceScope({
+          workspacePath: selectedWorkspace.path,
+          engagementId,
+          autonomyMode,
+          assets,
+        }),
+      )
+      .then(startConversation)
+      .catch(() => {
+        startConversation();
+      });
   };
 
   return (
@@ -239,6 +285,8 @@ export function WorkspaceSelectionForm({
             onEngagementChange={setEngagementId}
             autonomyMode={autonomyMode}
             onAutonomyChange={setAutonomyMode}
+            assets={assets}
+            onAssetsChange={setAssets}
             scopeError={scopeError}
           />
         )}

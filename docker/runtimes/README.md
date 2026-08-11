@@ -139,9 +139,43 @@ ADB_PORT=5555
 | Linux without KVM | EngMgr fail-fast unless `ALLOW_SLOW_EMULATOR=1` (software accel — often 5–15+ min) |
 | Docker Desktop (Win/mac) | Nested virt / hypervisor; treat as slow path; physical device bridge = Fase 3 |
 
-Cold boot of `budtmo/docker-android` is commonly **60–180 seconds** before `adb devices`
+Cold boot of the Android emulator image is commonly **60–180 seconds** before `adb devices`
 shows `device`. Runtime clients should retry ADB connect; EngMgr healthcheck uses
 `start_period: 180s`.
+
+### Local all-in-one (budtmo)
+
+`docker-compose.yml` includes `docker/runtimes/mobile/compose.android-emulator.fragment.yml`
+behind Compose profile `android-emulator` ([budtmo/docker-android](https://github.com/budtmo/docker-android)).
+noVNC on `:6080` feeds the Emulator tab (`EMULATOR_NOVNC_URL` → `/api/emulator`);
+ADB on `:5555` feeds mcp-mobile.
+
+```bash
+# already set in this checkout's .env for local smoke
+COMPOSE_PROFILES=android-emulator HOST_PORT=9000 docker compose up -d
+adb connect 127.0.0.1:5555
+# noVNC: http://127.0.0.1:6080  (also proxied at /api/emulator)
+```
+
+Inside the compose network: `ADB_HOST=android-emulator` `ADB_PORT=5555`,
+`EMULATOR_NOVNC_URL=http://android-emulator:6080`.
+Windows/Docker Desktop: no `/dev/kvm` — fragment uses `privileged: true` + `EMULATOR_ACCEL=false`.
+
+### Local all-in-one (web / network / sast)
+
+`docker-compose.yml` includes `docker/runtimes/compose.pentest-runtimes.fragment.yml`
+behind Compose profile `pentest-runtimes`. Builds from this tree (`heimdall/runtime-*:local`).
+
+```bash
+COMPOSE_PROFILES=android-emulator,pentest-runtimes HOST_PORT=9000 docker compose up -d --build
+curl -fsS http://127.0.0.1:8090/healthz   # runtime-web  (ZAP on :18080)
+curl -fsS http://127.0.0.1:8091/healthz   # runtime-network (msfrpcd if MSF_PASSWORD set)
+curl -fsS http://127.0.0.1:8094/healthz   # runtime-sast
+```
+
+Inside the compose network the agent-canvas sees `ZAP_URL=http://runtime-web:8080`,
+`MSF_RPC_HOST=runtime-network`, `RUNTIME_SAST_URL=http://runtime-sast:8094`.
+Host publishes are loopback-only. `MSF_PASSWORD` empty → msfrpcd stays off.
 
 Teardown: `docker compose … down -v` removes the MobSF named volume for that project.
 

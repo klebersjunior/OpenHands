@@ -268,6 +268,7 @@ COPY scripts/static-server.mjs /opt/agent-canvas/static-server.mjs
 COPY scripts/ingress.mjs /opt/agent-canvas/ingress.mjs
 COPY scripts/proxy-utils.mjs /opt/agent-canvas/proxy-utils.mjs
 COPY scripts/app-login.mjs /opt/agent-canvas/app-login.mjs
+COPY scripts/app-login-rbac.mjs /opt/agent-canvas/app-login-rbac.mjs
 COPY scripts/appwrite-proxy.mjs /opt/agent-canvas/appwrite-proxy.mjs
 COPY scripts/plane-proxy.mjs /opt/agent-canvas/plane-proxy.mjs
 # Imported by static-server.mjs / ingress.mjs for /api/integrations/dependency-track.
@@ -326,6 +327,11 @@ RUN curl -fsSL https://opencode.ai/install | HOME=/home/openhands bash \
     elif [ -x /home/openhands/.local/bin/opencode ]; then \
       ln -sf /home/openhands/.local/bin/opencode /usr/local/bin/opencode; \
     fi
+
+# Pentest MCP stdio servers (overridden at runtime by the compose bind-mount).
+COPY services/mcp-servers /opt/mcp-servers
+RUN python3 -m pip install --no-cache-dir "mcp>=1.6.0" "httpx>=0.28.0" \
+    || pip install --no-cache-dir "mcp>=1.6.0" "httpx>=0.28.0"
 
 # Copy generated defaults.env (from config/defaults.json via config-gen stage)
 COPY --from=config-gen /tmp/defaults.env /opt/agent-canvas/defaults.env

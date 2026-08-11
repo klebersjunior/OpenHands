@@ -3,20 +3,20 @@
  * These routes are NOT agent-server endpoints — they live on the canvas proxy.
  */
 
+import type {
+  AppLoginGroup,
+  AppLoginSession,
+  AppLoginUser,
+  AppPermission,
+} from "#/types/app-login-rbac";
+
 const APP_LOGIN_BASE = "/api/app-login";
 
 export type AppLoginStatus = {
   enabled: boolean;
 };
 
-export type AppLoginSession = {
-  authenticated: boolean;
-  username?: string;
-};
-
-export type AppLoginUser = {
-  username: string;
-};
+export type { AppLoginGroup, AppLoginSession, AppLoginUser };
 
 async function parseJson<T>(response: Response): Promise<T> {
   try {
@@ -57,11 +57,19 @@ async function request<T>(
   return { ok: true, status: response.status, data };
 }
 
+function unwrap<T>(
+  result: Awaited<ReturnType<typeof request<T>>>,
+): T {
+  if (!result.ok) {
+    throw new Error(result.error);
+  }
+  return result.data;
+}
+
 export class AppLoginService {
   static async getStatus(): Promise<AppLoginStatus> {
     const result = await request<AppLoginStatus>("/status");
     if (!result.ok) {
-      // If the proxy is an older build without the route, treat login as off.
       return { enabled: false };
     }
     return result.data;
@@ -97,34 +105,78 @@ export class AppLoginService {
   }
 
   static async listUsers(): Promise<AppLoginUser[]> {
-    const result = await request<{ users: AppLoginUser[] }>("/users");
-    if (!result.ok) {
-      throw new Error(result.error);
-    }
-    return result.data.users;
+    return unwrap(await request<{ users: AppLoginUser[] }>("/users")).users;
   }
 
-  static async createUser(
+  static async createUser(input: {
+    username: string;
+    password: string;
+    groupId?: string;
+  }): Promise<AppLoginUser> {
+    return unwrap(
+      await request<AppLoginUser>("/users", {
+        method: "POST",
+        body: JSON.stringify(input),
+      }),
+    );
+  }
+
+  static async updateUserGroup(
     username: string,
-    password: string,
+    groupId: string,
   ): Promise<AppLoginUser> {
-    const result = await request<AppLoginUser>("/users", {
-      method: "POST",
-      body: JSON.stringify({ username, password }),
-    });
-    if (!result.ok) {
-      throw new Error(result.error);
-    }
-    return result.data;
+    return unwrap(
+      await request<AppLoginUser>(`/users/${encodeURIComponent(username)}`, {
+        method: "PATCH",
+        body: JSON.stringify({ groupId }),
+      }),
+    );
   }
 
   static async deleteUser(username: string): Promise<void> {
-    const result = await request<{ deleted: string }>(
-      `/users/${encodeURIComponent(username)}`,
-      { method: "DELETE" },
+    unwrap(
+      await request<{ deleted: string }>(
+        `/users/${encodeURIComponent(username)}`,
+        { method: "DELETE" },
+      ),
     );
-    if (!result.ok) {
-      throw new Error(result.error);
-    }
+  }
+
+  static async listGroups(): Promise<AppLoginGroup[]> {
+    return unwrap(await request<{ groups: AppLoginGroup[] }>("/groups"))
+      .groups;
+  }
+
+  static async createGroup(input: {
+    name: string;
+    permissions: AppPermission[];
+  }): Promise<AppLoginGroup> {
+    return unwrap(
+      await request<AppLoginGroup>("/groups", {
+        method: "POST",
+        body: JSON.stringify(input),
+      }),
+    );
+  }
+
+  static async updateGroup(
+    groupId: string,
+    input: { name?: string; permissions?: AppPermission[] },
+  ): Promise<AppLoginGroup> {
+    return unwrap(
+      await request<AppLoginGroup>(`/groups/${encodeURIComponent(groupId)}`, {
+        method: "PATCH",
+        body: JSON.stringify(input),
+      }),
+    );
+  }
+
+  static async deleteGroup(groupId: string): Promise<void> {
+    unwrap(
+      await request<{ deleted: string }>(
+        `/groups/${encodeURIComponent(groupId)}`,
+        { method: "DELETE" },
+      ),
+    );
   }
 }

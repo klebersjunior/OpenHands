@@ -7,8 +7,9 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - engagement-manager-data:/data
     environment:
-      - ENGMGR_DB_URL=postgresql+asyncpg://engmgr:${ENGMGR_DB_PASSWORD}@engmgr-db/engmgr
-      - SESSION_API_KEY=${SESSION_API_KEY:?SESSION_API_KEY is required}
+      - ENGMGR_DB_URL=postgresql+asyncpg://engmgr:${ENGMGR_DB_PASSWORD:?ENGMGR_DB_PASSWORD is required}@engmgr-db/engmgr
+      - SESSION_API_KEY=${SESSION_API_KEY:-${LOCAL_BACKEND_API_KEY:?Set SESSION_API_KEY or LOCAL_BACKEND_API_KEY in .env}}
+      - DEFAULT_PENTEST_PROFILE=${DEFAULT_PENTEST_PROFILE:-pentester}
       - DEFECTDOJO_API_URL=${DEFECTDOJO_API_URL:-https://defectdojo.heimdall.local}
       - DEFECTDOJO_API_TOKEN=${DEFECTDOJO_API_TOKEN:-}
       - PROVISIONER_DRY_RUN=${PROVISIONER_DRY_RUN:-true}
@@ -17,7 +18,19 @@ services:
       engmgr-db:
         condition: service_healthy
     ports:
-      - "18003:8000"
+      - "${ENGMGR_HOST_PORT:-18003}:8000"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5)",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
 
   engmgr-db:
     image: postgres:16-alpine

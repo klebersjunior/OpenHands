@@ -14,6 +14,15 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import bcrypt from "bcryptjs";
+import {
+  ALL_APP_PERMISSIONS,
+  APP_USERS_MANAGE,
+  BUILTIN_GROUP_NAMES,
+  BUILTIN_GROUP_PERMISSIONS,
+  builtinGroups,
+  normalizePermissions,
+  slugifyGroupId,
+} from "./app-login-rbac.mjs";
 
 export const APP_LOGIN_PATH_PREFIX = "/api/app-login";
 export const APP_LOGIN_COOKIE_NAME = "oh_app_login_session";
@@ -92,7 +101,10 @@ export function createAppLoginStore(options = {}) {
   const usersPath = join(stateDir, USERS_FILENAME);
   const sessionsPath = join(stateDir, SESSIONS_FILENAME);
 
-  /** @type {{ users: Array<{ username: string, passwordHash: string }> } | null} */
+  /** @type {{
+   *   users: Array<{ username: string, passwordHash: string, groupId: string }>,
+   *   groups: Array<{ id: string, name: string, builtin: boolean, permissions: string[] }>
+   * } | null} */
   let usersCache = null;
   /** @type {{ sessions: Record<string, { username: string, createdAt: string }> } | null} */
   let sessionsCache = null;
@@ -101,49 +113,130 @@ export function createAppLoginStore(options = {}) {
     await mkdir(stateDir, { recursive: true });
   }
 
+  function mergeBuiltinGroups(existing) {
+    const byId = new Map(
+      (Array.isArray(existing) ? existing : [])
+        .filter((g) => g && typeof g.id === "string")
+        .map((g) => [g.id, g]),
+    );
+    for (const builtin of builtinGroups()) {
+      byId.set(builtin.id, builtin);
+    }
+    const custom = (Array.isArray(existing) ? existing : []).filter(
+      (g) =>
+        g &&
+        typeof g.id === "string" &&
+        !BUILTIN_GROUP_PERMISSIONS[g.id] &&
+        typeof g.name === "string",
+    );
+    return [
+      ...builtinGroups(),
+      ...custom.map((g) => ({
+        id: g.id,
+        name: g.name.trim() || g.id,
+        builtin: false,
+        permissions: normalizePermissions(g.permissions),
+      })),
+    ];
+  }
+
+  function defaultGroupIdFor(username) {
+    return username === DEFAULT_APP_LOGIN_USERNAME ? "admin" : "pentester";
+  }
+
+  function findGroup(groupId) {
+    return usersCache?.groups.find((g) => g.id === groupId) ?? null;
+  }
+
+  function publicGroup(group) {
+    return {
+      id: group.id,
+      name: group.name,
+      builtin: Boolean(group.builtin),
+      permissions: [...group.permissions],
+    };
+  }
+
+  function publicUser(user) {
+    const group = findGroup(user.groupId) ?? findGroup("pentester");
+    return {
+      username: user.username,
+      groupId: group?.id ?? "pentester",
+      groupName: group?.name ?? BUILTIN_GROUP_NAMES.pentester,
+      permissions: group ? [...group.permissions] : [],
+    };
+  }
+
+  function usersWithManage() {
+    if (!usersCache) return [];
+    return usersCache.users.filter((u) => {
+      const group = findGroup(u.groupId);
+      return group?.permissions.includes(APP_USERS_MANAGE);
+    });
+  }
+
   async function loadUsers() {
     if (usersCache) return usersCache;
     await ensureStateDir();
+    let parsed = null;
     try {
       const raw = await readFile(usersPath, "utf8");
-      const parsed = JSON.parse(raw);
+      parsed = JSON.parse(raw);
       if (!parsed || !Array.isArray(parsed.users)) {
         throw new Error("invalid users file");
       }
-      usersCache = {
-        users: parsed.users
-          .filter(
-            (u) =>
-              u &&
-              typeof u.username === "string" &&
-              typeof u.passwordHash === "string",
-          )
-          .map((u) => ({
-            username: u.username,
-            passwordHash: u.passwordHash,
-          })),
-      };
     } catch {
-      // Missing or corrupt file → seed the default internal user.
+      parsed = null;
+    }
+
+    if (!parsed) {
       const passwordHash = await hashAppLoginPassword(DEFAULT_APP_LOGIN_PASSWORD);
       usersCache = {
+        groups: builtinGroups(),
         users: [
           {
             username: DEFAULT_APP_LOGIN_USERNAME,
             passwordHash,
+            groupId: "admin",
           },
         ],
       };
       await persistUsers();
+      return usersCache;
+    }
+
+    usersCache = {
+      groups: mergeBuiltinGroups(parsed.groups),
+      users: parsed.users
+        .filter(
+          (u) =>
+            u &&
+            typeof u.username === "string" &&
+            typeof u.passwordHash === "string",
+        )
+        .map((u) => ({
+          username: u.username,
+          passwordHash: u.passwordHash,
+          groupId:
+            typeof u.groupId === "string" && u.groupId
+              ? u.groupId
+              : defaultGroupIdFor(u.username),
+        })),
+    };
+    for (const user of usersCache.users) {
+      if (!findGroup(user.groupId)) {
+        user.groupId = defaultGroupIdFor(user.username);
+      }
     }
     if (usersCache.users.length === 0) {
       const passwordHash = await hashAppLoginPassword(DEFAULT_APP_LOGIN_PASSWORD);
       usersCache.users.push({
         username: DEFAULT_APP_LOGIN_USERNAME,
         passwordHash,
+        groupId: "admin",
       });
-      await persistUsers();
     }
+    await persistUsers();
     return usersCache;
   }
 
@@ -193,6 +286,30 @@ export function createAppLoginStore(options = {}) {
       return data.users.map((u) => u.username).sort((a, b) => a.localeCompare(b));
     },
 
+    async listUsers() {
+      const data = await loadUsers();
+      return data.users
+        .map((u) => publicUser(u))
+        .sort((a, b) => a.username.localeCompare(b.username));
+    },
+
+    async listGroups() {
+      const data = await loadUsers();
+      return data.groups.map((g) => publicGroup(g));
+    },
+
+    async getPublicSession(username) {
+      const data = await loadUsers();
+      const user = data.users.find((u) => u.username === username);
+      if (!user) return null;
+      return publicUser(user);
+    },
+
+    async userHasPermission(username, permission) {
+      const session = await this.getPublicSession(username);
+      return Boolean(session?.permissions.includes(permission));
+    },
+
     async authenticate(username, password) {
       const data = await loadUsers();
       const user = data.users.find((u) => u.username === username);
@@ -240,7 +357,7 @@ export function createAppLoginStore(options = {}) {
       await persistSessions();
     },
 
-    async addUser(username, password) {
+    async addUser(username, password, groupId) {
       const normalized = username.trim();
       if (!normalized) {
         throw Object.assign(new Error("Username is required"), { status: 400 });
@@ -254,12 +371,116 @@ export function createAppLoginStore(options = {}) {
       if (data.users.some((u) => u.username === normalized)) {
         throw Object.assign(new Error("Username already exists"), { status: 409 });
       }
+      const requestedGroup =
+        typeof groupId === "string" && groupId.trim() ? groupId.trim() : "pentester";
+      if (!findGroup(requestedGroup)) {
+        throw Object.assign(new Error("Unknown group"), { status: 400 });
+      }
       data.users.push({
         username: normalized,
         passwordHash: await hashAppLoginPassword(password),
+        groupId: requestedGroup,
       });
       await persistUsers();
-      return normalized;
+      return publicUser(data.users[data.users.length - 1]);
+    },
+
+    /**
+     * @param {string} username
+     * @param {string} groupId
+     */
+    async setUserGroup(username, groupId) {
+      const data = await loadUsers();
+      const user = data.users.find((u) => u.username === username);
+      if (!user) {
+        throw Object.assign(new Error("User not found"), { status: 404 });
+      }
+      const group = findGroup(groupId);
+      if (!group) {
+        throw Object.assign(new Error("Unknown group"), { status: 400 });
+      }
+      const wasAdmin = findGroup(user.groupId)?.permissions.includes(
+        APP_USERS_MANAGE,
+      );
+      const willAdmin = group.permissions.includes(APP_USERS_MANAGE);
+      if (wasAdmin && !willAdmin && usersWithManage().length <= 1) {
+        throw Object.assign(new Error("Cannot demote the last administrator"), {
+          status: 400,
+        });
+      }
+      user.groupId = group.id;
+      await persistUsers();
+      return publicUser(user);
+    },
+
+    /**
+     * @param {{ name: string, permissions?: string[], id?: string }} input
+     */
+    async addGroup(input) {
+      const data = await loadUsers();
+      const name = typeof input.name === "string" ? input.name.trim() : "";
+      if (!name) {
+        throw Object.assign(new Error("Group name is required"), { status: 400 });
+      }
+      const id = input.id ? slugifyGroupId(input.id) : slugifyGroupId(name);
+      if (findGroup(id)) {
+        throw Object.assign(new Error("Group already exists"), { status: 409 });
+      }
+      const group = {
+        id,
+        name,
+        builtin: false,
+        permissions: normalizePermissions(input.permissions),
+      };
+      data.groups.push(group);
+      await persistUsers();
+      return publicGroup(group);
+    },
+
+    /**
+     * @param {string} groupId
+     * @param {{ name?: string, permissions?: string[] }} patch
+     */
+    async updateGroup(groupId, patch) {
+      const data = await loadUsers();
+      const group = findGroup(groupId);
+      if (!group) {
+        throw Object.assign(new Error("Group not found"), { status: 404 });
+      }
+      if (group.builtin) {
+        throw Object.assign(new Error("Cannot edit a built-in group"), {
+          status: 400,
+        });
+      }
+      if (typeof patch.name === "string" && patch.name.trim()) {
+        group.name = patch.name.trim();
+      }
+      if (Array.isArray(patch.permissions)) {
+        group.permissions = normalizePermissions(patch.permissions);
+      }
+      await persistUsers();
+      return publicGroup(group);
+    },
+
+    /**
+     * @param {string} groupId
+     */
+    async removeGroup(groupId) {
+      const data = await loadUsers();
+      const group = findGroup(groupId);
+      if (!group) {
+        throw Object.assign(new Error("Group not found"), { status: 404 });
+      }
+      if (group.builtin) {
+        throw Object.assign(new Error("Cannot delete a built-in group"), {
+          status: 400,
+        });
+      }
+      if (data.users.some((u) => u.groupId === groupId)) {
+        throw Object.assign(new Error("Group still has members"), { status: 400 });
+      }
+      data.groups = data.groups.filter((g) => g.id !== groupId);
+      await persistUsers();
     },
 
     async removeUser(username) {
@@ -269,10 +490,19 @@ export function createAppLoginStore(options = {}) {
           status: 400,
         });
       }
-      const next = data.users.filter((u) => u.username !== username);
-      if (next.length === data.users.length) {
+      const target = data.users.find((u) => u.username === username);
+      if (!target) {
         throw Object.assign(new Error("User not found"), { status: 404 });
       }
+      const isAdmin = findGroup(target.groupId)?.permissions.includes(
+        APP_USERS_MANAGE,
+      );
+      if (isAdmin && usersWithManage().length <= 1) {
+        throw Object.assign(new Error("Cannot delete the last administrator"), {
+          status: 400,
+        });
+      }
+      const next = data.users.filter((u) => u.username !== username);
       data.users = next;
       await persistUsers();
 
@@ -381,6 +611,19 @@ async function requireSessionUser(req, store) {
 }
 
 /**
+ * @param {ReturnType<typeof createAppLoginStore>} store
+ * @param {string} username
+ */
+async function requireManageUsers(store, username) {
+  const allowed = await store.userHasPermission(username, APP_USERS_MANAGE);
+  if (!allowed) {
+    throw Object.assign(new Error("Missing permission: app.users.manage"), {
+      status: 403,
+    });
+  }
+}
+
+/**
  * Create a request handler for /api/app-login/*.
  *
  * @param {ReturnType<typeof createAppLoginStore>} [store]
@@ -415,7 +658,14 @@ export function createAppLoginHandler(store = createAppLoginStore()) {
           sendJson(res, 401, { authenticated: false });
           return true;
         }
-        sendJson(res, 200, { authenticated: true, username });
+        const session = await store.getPublicSession(username);
+        sendJson(res, 200, {
+          authenticated: true,
+          username,
+          groupId: session?.groupId ?? "pentester",
+          groupName: session?.groupName ?? BUILTIN_GROUP_NAMES.pentester,
+          permissions: session?.permissions ?? [],
+        });
         return true;
       }
 
@@ -455,32 +705,94 @@ export function createAppLoginHandler(store = createAppLoginStore()) {
         return true;
       }
 
+      if (path === `${APP_LOGIN_PATH_PREFIX}/permissions` && method === "GET") {
+        await requireSessionUser(req, store);
+        sendJson(res, 200, { permissions: ALL_APP_PERMISSIONS });
+        return true;
+      }
+
+      if (path === `${APP_LOGIN_PATH_PREFIX}/groups` && method === "GET") {
+        await requireSessionUser(req, store);
+        sendJson(res, 200, { groups: await store.listGroups() });
+        return true;
+      }
+
+      if (path === `${APP_LOGIN_PATH_PREFIX}/groups` && method === "POST") {
+        const { username: actor } = await requireSessionUser(req, store);
+        await requireManageUsers(store, actor);
+        const body = await readJsonBody(req);
+        const created = await store.addGroup({
+          name: typeof body.name === "string" ? body.name : "",
+          permissions: body.permissions,
+          id: typeof body.id === "string" ? body.id : undefined,
+        });
+        sendJson(res, 201, created);
+        return true;
+      }
+
+      const groupMatch = path.match(
+        new RegExp(`^${APP_LOGIN_PATH_PREFIX}/groups/([^/]+)$`),
+      );
+      if (groupMatch && method === "PATCH") {
+        const { username: actor } = await requireSessionUser(req, store);
+        await requireManageUsers(store, actor);
+        const body = await readJsonBody(req);
+        const updated = await store.updateGroup(
+          decodeURIComponent(groupMatch[1]),
+          {
+            name: typeof body.name === "string" ? body.name : undefined,
+            permissions: body.permissions,
+          },
+        );
+        sendJson(res, 200, updated);
+        return true;
+      }
+      if (groupMatch && method === "DELETE") {
+        const { username: actor } = await requireSessionUser(req, store);
+        await requireManageUsers(store, actor);
+        const target = decodeURIComponent(groupMatch[1]);
+        await store.removeGroup(target);
+        sendJson(res, 200, { deleted: target });
+        return true;
+      }
+
       if (path === `${APP_LOGIN_PATH_PREFIX}/users` && method === "GET") {
         await requireSessionUser(req, store);
-        sendJson(res, 200, {
-          users: (await store.listUsernames()).map((username) => ({ username })),
-        });
+        sendJson(res, 200, { users: await store.listUsers() });
         return true;
       }
 
       if (path === `${APP_LOGIN_PATH_PREFIX}/users` && method === "POST") {
-        await requireSessionUser(req, store);
+        const { username: actor } = await requireSessionUser(req, store);
+        await requireManageUsers(store, actor);
         const body = await readJsonBody(req);
-        const username =
-          typeof body.username === "string" ? body.username : "";
-        const password =
-          typeof body.password === "string" ? body.password : "";
-        const created = await store.addUser(username, password);
-        sendJson(res, 201, { username: created });
+        const created = await store.addUser(
+          typeof body.username === "string" ? body.username : "",
+          typeof body.password === "string" ? body.password : "",
+          typeof body.groupId === "string" ? body.groupId : undefined,
+        );
+        sendJson(res, 201, created);
         return true;
       }
 
-      const deleteMatch = path.match(
+      const userMatch = path.match(
         new RegExp(`^${APP_LOGIN_PATH_PREFIX}/users/([^/]+)$`),
       );
-      if (deleteMatch && method === "DELETE") {
-        await requireSessionUser(req, store);
-        const target = decodeURIComponent(deleteMatch[1]);
+      if (userMatch && method === "PATCH") {
+        const { username: actor } = await requireSessionUser(req, store);
+        await requireManageUsers(store, actor);
+        const body = await readJsonBody(req);
+        const updated = await store.setUserGroup(
+          decodeURIComponent(userMatch[1]),
+          typeof body.groupId === "string" ? body.groupId : "",
+        );
+        sendJson(res, 200, updated);
+        return true;
+      }
+      if (userMatch && method === "DELETE") {
+        const { username: actor } = await requireSessionUser(req, store);
+        await requireManageUsers(store, actor);
+        const target = decodeURIComponent(userMatch[1]);
         await store.removeUser(target);
         sendJson(res, 200, { deleted: target });
         return true;

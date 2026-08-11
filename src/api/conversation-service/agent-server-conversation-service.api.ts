@@ -18,6 +18,9 @@ import {
   getAgentServerWorkingDir,
 } from "../agent-server-config";
 import { resolveAbsoluteAgentServerPath } from "../agent-server-home";
+import { loadWorkspaceBundle } from "#/components/features/home/workspace-dropdown/workspace-profile";
+import type { PentestAsset } from "#/components/features/pentest/pentest-assets";
+import type { AutonomyMode } from "#/types/workspace-types";
 import {
   getActiveBackend,
   getEffectiveLocalBackend,
@@ -433,6 +436,30 @@ class AgentServerConversationService {
       workspaceMode ?? (workingDirOverride ? "local_repo" : "new_worktree");
 
     // Use encrypted settings to avoid exposing secrets in the browser
+    let pentestLaunch:
+      | {
+          engagementId: string | null;
+          autonomyMode: AutonomyMode;
+          assets: PentestAsset[];
+        }
+      | undefined;
+    let launchAgentProfileId = agentProfileId;
+    if (workingDirOverride) {
+      try {
+        const bundle = await loadWorkspaceBundle(workingDir);
+        if (bundle.profile.workspaceType === "pentest") {
+          pentestLaunch = {
+            engagementId: bundle.profile.engagementId,
+            autonomyMode: bundle.profile.autonomyMode,
+            assets: bundle.profile.assets,
+          };
+          launchAgentProfileId = undefined;
+        }
+      } catch {
+        // Folder may not have a workspace profile yet.
+      }
+    }
+
     const payload = await buildStartConversationRequestWithEncryptedSettings({
       settings,
       query: initialUserMsg,
@@ -446,9 +473,10 @@ class AgentServerConversationService {
       parentConversationId,
       workingDir,
       worktree: resolvedWorkspaceMode === "new_worktree",
-      agentProfileId,
-      agentProfileKind,
+      agentProfileId: launchAgentProfileId,
+      agentProfileKind: launchAgentProfileId ? agentProfileKind : undefined,
       titleLlmProfile,
+      pentestLaunch,
     });
 
     const data = await new ConversationClient(
@@ -470,6 +498,14 @@ class AgentServerConversationService {
         git_provider: metadata?.git_provider ?? null,
         selected_workspace: workingDirOverride ?? null,
         workspace_mode: resolvedWorkspaceMode,
+        ...(pentestLaunch
+          ? {
+              workspace_type: "pentest" as const,
+              engagement_id: pentestLaunch.engagementId,
+              autonomy_mode: pentestLaunch.autonomyMode,
+              pentest_assets: pentestLaunch.assets,
+            }
+          : {}),
       });
     }
 

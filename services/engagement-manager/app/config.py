@@ -11,8 +11,13 @@ _FALLBACK_MOBSF = "opensecurity/mobile-security-framework-mobsf:latest"
 
 
 def _repo_root() -> Path:
-    # app/config.py → engagement-manager → services → repo root
-    return Path(__file__).resolve().parents[3]
+    # Host checkout: app/config.py → engagement-manager → services → repo root.
+    # Docker image: /app/app/config.py — parents[3] does not exist (IndexError).
+    here = Path(__file__).resolve()
+    for parent in here.parents:
+        if (parent / "config" / "defaults.json").is_file():
+            return parent
+    return here.parent
 
 
 def _defaults_images() -> dict[str, str]:

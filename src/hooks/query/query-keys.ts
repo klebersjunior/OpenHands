@@ -41,6 +41,11 @@ export const LOCAL_WORKSPACES_QUERY_KEYS = {
   all: ["local-workspaces"] as const,
 } as const;
 
+export const WORKSPACE_PROFILE_QUERY_KEYS = {
+  all: ["workspace-profile"] as const,
+  byPath: (path: string) => ["workspace-profile", path] as const,
+} as const;
+
 export const PLUGINS_QUERY_KEYS = {
   /** Dynamic marketplace catalog (used by `use-plugins-marketplace`). */
   marketplace: ["plugins-marketplace"] as const,
@@ -64,6 +69,7 @@ export const APP_LOGIN_QUERY_KEYS = {
   status: ["app-login", "status"] as const,
   session: ["app-login", "session"] as const,
   users: ["app-login", "users"] as const,
+  groups: ["app-login", "groups"] as const,
 } as const;
 
 /** Pentest RBAC capabilities (PROJETOSIN-182). */

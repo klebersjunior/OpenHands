@@ -4,8 +4,9 @@ services:
       context: ..
       dockerfile: findings-service/Dockerfile
     environment:
-      - FINDINGS_DB_URL=postgresql+asyncpg://findings:${FINDINGS_DB_PASSWORD}@findings-db/findings
-      - SESSION_API_KEY=${SESSION_API_KEY:?SESSION_API_KEY is required}
+      - FINDINGS_DB_URL=postgresql+asyncpg://findings:${FINDINGS_DB_PASSWORD:?FINDINGS_DB_PASSWORD is required}@findings-db/findings
+      - SESSION_API_KEY=${SESSION_API_KEY:-${LOCAL_BACKEND_API_KEY:?Set SESSION_API_KEY or LOCAL_BACKEND_API_KEY in .env}}
+      - DEFAULT_PENTEST_PROFILE=${DEFAULT_PENTEST_PROFILE:-pentester}
       - DEFECTDOJO_API_URL=${DEFECTDOJO_API_URL:-https://defectdojo.heimdall.local}
       - DEFECTDOJO_API_TOKEN=${DEFECTDOJO_API_TOKEN:-}
       - DEFECTDOJO_PRODUCT_TYPE_DEFAULT=${DEFECTDOJO_PRODUCT_TYPE_DEFAULT:-Pentest}
@@ -14,7 +15,19 @@ services:
       findings-db:
         condition: service_healthy
     ports:
-      - "18002:8000"
+      - "${FINDINGS_HOST_PORT:-18002}:8000"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5)",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
 
   findings-db:
     image: postgres:16-alpine

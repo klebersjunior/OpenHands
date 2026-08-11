@@ -1,4 +1,4 @@
-import type { SkillCategoryId } from "@openhands/extensions/skills";
+import type { AppSkillCategoryId } from "#/utils/skill-category";
 import type { LucideIcon } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { cn } from "#/utils/utils";
@@ -18,7 +18,7 @@ function iconFor(
   value: string,
 ): LucideIcon | undefined {
   if (groupId !== "category") return undefined;
-  return SKILL_CATEGORY_ICONS[value as SkillCategoryId];
+  return SKILL_CATEGORY_ICONS[value as AppSkillCategoryId];
 }
 
 export function SkillFacetRail({

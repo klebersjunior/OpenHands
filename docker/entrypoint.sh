@@ -6,7 +6,9 @@
 #   1. Agent Server   on port $AGENT_SERVER_PORT  (default 18000)
 #   2. Automation     on port $AUTOMATION_PORT     (default 18001)
 #   3. Static server  on port $PORT               (default 8000)
-#      Routes /api/automation/* → automation, /api/* → agent-server,
+#      Routes /api/pentest/me + /api/pentest/findings → findings,
+#      /api/pentest/engagements → engagement-manager,
+#      /api/automation/* → automation, /api/* → agent-server,
 #      and serves the frontend static build for everything else.
 #   4. (Optional) Public-mode static server on $PUBLIC_MODE_PORT
 #      Same frontend, but with --auth-required (no baked session key).
@@ -48,6 +50,10 @@
 #                          Override in production when the external URL differs.
 #   AUTOMATION_WORKSPACE_BASE – Directory for automation run workspaces
 #                          (default: ~/.openhands/workspaces)
+#   FINDINGS_UPSTREAM      – Findings Service base URL (default:
+#                          http://findings-service:8000 — Docker DNS sibling)
+#   ENGMGR_UPSTREAM        – Engagement Manager base URL (default:
+#                          http://engagement-manager:8000)
 #   Any agent-server or automation env vars are passed through.
 # ═══════════════════════════════════════════════════════════════════════════════
 set -uo pipefail
@@ -65,6 +71,9 @@ fi
 PORT="${PORT:-${CONFIG_PROXY_PORT:-8000}}"
 AGENT_SERVER_PORT="${AGENT_SERVER_PORT:-${CONFIG_AGENT_SERVER_PORT:-18000}}"
 AUTOMATION_PORT="${AUTOMATION_PORT:-${CONFIG_AUTOMATION_PORT:-18001}}"
+# Sibling containers on the compose network — not 127.0.0.1 (PROJETOSIN-200).
+FINDINGS_UPSTREAM="${FINDINGS_UPSTREAM:-http://findings-service:8000}"
+ENGMGR_UPSTREAM="${ENGMGR_UPSTREAM:-http://engagement-manager:8000}"
 # Internal KasmVNC port (loopback only; never published). Used by desktop-proxy.
 DESKTOP_VNC_PORT="${DESKTOP_VNC_PORT:-${CONFIG_DESKTOP_VNC_PORT:-6901}}"
 export DESKTOP_VNC_PORT
@@ -295,6 +304,9 @@ if [ "$STACK_MODE" = "backend" ]; then
   node /opt/agent-canvas/ingress.mjs \
     --port "$PORT" \
     --runtime-services-info "$RUNTIME_SERVICES_INFO" \
+    --route "/api/pentest/me=${FINDINGS_UPSTREAM}" \
+    --route "/api/pentest/findings=${FINDINGS_UPSTREAM}" \
+    --route "/api/pentest/engagements=${ENGMGR_UPSTREAM}" \
     --route "/api/automation=http://127.0.0.1:${AUTOMATION_PORT}" \
     --route "/api=http://127.0.0.1:${AGENT_SERVER_PORT}" \
     --route "/server_info=http://127.0.0.1:${AGENT_SERVER_PORT}" \
@@ -322,6 +334,9 @@ else
     --base-path "$AGENT_CANVAS_BASE_PATH" \
     --session-api-key "$EFFECTIVE_SESSION_KEY" \
     --runtime-services-info "$RUNTIME_SERVICES_INFO" \
+    --route "/api/pentest/me=${FINDINGS_UPSTREAM}" \
+    --route "/api/pentest/findings=${FINDINGS_UPSTREAM}" \
+    --route "/api/pentest/engagements=${ENGMGR_UPSTREAM}" \
     --route "/api/automation=http://127.0.0.1:${AUTOMATION_PORT}" \
     --route "/api=http://127.0.0.1:${AGENT_SERVER_PORT}" \
     --route "/server_info=http://127.0.0.1:${AGENT_SERVER_PORT}" \
@@ -349,6 +364,9 @@ else
       --base-path "$AGENT_CANVAS_BASE_PATH" \
       --auth-required \
       --runtime-services-info "$RUNTIME_SERVICES_INFO" \
+      --route "/api/pentest/me=${FINDINGS_UPSTREAM}" \
+      --route "/api/pentest/findings=${FINDINGS_UPSTREAM}" \
+      --route "/api/pentest/engagements=${ENGMGR_UPSTREAM}" \
       --route "/api/automation=http://127.0.0.1:${AUTOMATION_PORT}" \
       --route "/api=http://127.0.0.1:${AGENT_SERVER_PORT}" \
       --route "/server_info=http://127.0.0.1:${AGENT_SERVER_PORT}" \

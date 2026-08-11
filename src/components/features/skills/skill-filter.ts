@@ -1,4 +1,4 @@
-import type { SkillCategoryId } from "@openhands/extensions/skills";
+import type { AppSkillCategoryId } from "#/utils/skill-category";
 import { I18nKey } from "#/i18n/declaration";
 import type { SkillInfo, SkillType } from "#/types/settings";
 import {
@@ -35,7 +35,7 @@ const SKILL_TYPE_ORDER: readonly SkillType[] = [
 export interface SkillFilterState {
   query: string;
   sources: Set<SkillScope>;
-  categories: Set<SkillCategoryId>;
+  categories: Set<AppSkillCategoryId>;
   types: Set<SkillType>;
   states: Set<SkillEnabledState>;
 }

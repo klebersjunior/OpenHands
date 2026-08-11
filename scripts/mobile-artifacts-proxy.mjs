@@ -25,10 +25,10 @@ const artifactsByEngagement = new Map();
  */
 export function isMobileArtifactsProxyRequest(url) {
   const path = (url ?? "/").split("?")[0];
-  return (
-    path === MOBILE_ARTIFACTS_PATH_PREFIX ||
-    path.startsWith(`${MOBILE_ARTIFACTS_PATH_PREFIX}/`)
-  );
+  // Only /:id/mobile/* — do not swallow EngMgr list/create (GET/POST "").
+  return new RegExp(
+    `^${MOBILE_ARTIFACTS_PATH_PREFIX}/[^/]+/mobile(?:/|$)`,
+  ).test(path);
 }
 
 /**

@@ -17,6 +17,7 @@ const CloudAiTab = lazy(() => import("#/routes/cloudai-tab"));
 const SecurityTab = lazy(() => import("#/routes/security-tab"));
 const DesktopTab = lazy(() => import("#/routes/desktop-tab"));
 const EmulatorTab = lazy(() => import("#/routes/emulator-tab"));
+const PentestTab = lazy(() => import("#/routes/pentest-tab"));
 const Terminal = lazy(() => import("#/components/features/terminal/terminal"));
 
 const TAB_CONFIG = {
@@ -29,6 +30,7 @@ const TAB_CONFIG = {
   security: { component: SecurityTab },
   desktop: { component: DesktopTab },
   emulator: { component: EmulatorTab },
+  pentest: { component: PentestTab },
 };
 
 export function ConversationTabContent() {
