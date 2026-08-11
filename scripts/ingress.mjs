@@ -195,6 +195,7 @@ export function startIngress(config) {
   const handleDesktopProxy = createDesktopProxyHandler({ agentServerUrl });
   const handleEmulatorProxy = createEmulatorProxyHandler({
     agentServerUrl,
+    upstreamUrl: process.env.EMULATOR_NOVNC_URL ?? null,
     runtimeServicesInfo: config.runtimeServicesInfo,
   });
   const handleMobileArtifactsProxy = createMobileArtifactsProxyHandler({

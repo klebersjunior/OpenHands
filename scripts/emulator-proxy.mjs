@@ -408,13 +408,17 @@ export function createEmulatorProxyHandler(options) {
       socket.destroy();
       return;
     }
-    const origin =
-      (typeof req.headers.origin === "string" && req.headers.origin) ||
-      `http://${parsed.host}`;
+    // Forward Origin as the upstream noVNC origin. Echoing the browser
+    // origin (http://127.0.0.1:9000) makes some websockify builds reject
+    // the handshake; the iframe then reports CORS / 1006.
+    const origin = `http://${parsed.host}`;
+    // noVNC 1.7 often omits Sec-WebSocket-Protocol. Injecting "binary"
+    // makes the 101 advertise a subprotocol the browser never offered,
+    // and Chromium closes the socket with 1006.
     const wsProtocol =
       typeof req.headers["sec-websocket-protocol"] === "string"
-        ? req.headers["sec-websocket-protocol"]
-        : "binary";
+        ? req.headers["sec-websocket-protocol"].trim()
+        : "";
     const path = req.url || "/websockify";
 
     const upstream = netConnect({ host: parsed.hostname, port });
@@ -448,11 +452,12 @@ export function createEmulatorProxyHandler(options) {
         "Connection: Upgrade",
         `Sec-WebSocket-Key: ${wsKey}`,
         "Sec-WebSocket-Version: 13",
-        `Sec-WebSocket-Protocol: ${wsProtocol}`,
         `Origin: ${origin}`,
-        "",
-        "",
       ];
+      if (wsProtocol) {
+        lines.push(`Sec-WebSocket-Protocol: ${wsProtocol}`);
+      }
+      lines.push("", "");
       upstream.write(lines.join("\r\n"));
       if (head?.length) {
         upstream.write(head);
