@@ -205,6 +205,18 @@ class EngagementService:
     ) -> bool:
         rules = await self.list_scope(engagement_id, user_id=user_id)
         tuples = [(r.rule_type, r.target_type, r.target_value) for r in rules]
-        return is_target_allowed(
+        allowed = is_target_allowed(
             tuples, target_type=target_type, target_value=target_value
         )
+        if not allowed:
+            try:
+                from shared.otel_setup import emit_scope_violation
+
+                emit_scope_violation(
+                    target=target_value,
+                    engagement_id=str(engagement_id),
+                    extra={"target_type": target_type},
+                )
+            except Exception:
+                pass
+        return allowed

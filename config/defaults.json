@@ -49,6 +49,14 @@
     "electronComposeRoots": [
       "~/.openhands/engagements",
       "~/.openhands/agent-canvas"
-    ]
+    ],
+    "otel": {
+      "_comment": "PROJETOSIN-199 — OTLP export to existing Heimdall SigNoz. Empty endpoint = no-op exporter (CI-safe). Does not provision SigNoz. Separate from PostHog product analytics.",
+      "enabled": null,
+      "exporterOtlpEndpoint": "",
+      "exporterOtlpHeaders": "",
+      "llmBodies": false,
+      "deploymentMode": "dev"
+    }
   }
 }
