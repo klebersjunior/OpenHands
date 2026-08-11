@@ -148,6 +148,7 @@ When conversation metadata sets `pentest_adb_target=physical`:
 
 Default `PENTEST_ADB_TARGET=emulator` keeps `ADB_HOST=android-emulator`.
 
+
 ## Tests
 
 ```bash

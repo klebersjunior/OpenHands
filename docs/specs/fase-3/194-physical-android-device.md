@@ -65,6 +65,7 @@ Linux sem `host.docker.internal`: usar IP da bridge Docker (`ip -4 addr show doc
 
 ---
 
+
 ## Reconexão (contrato comportamental)
 
 ```

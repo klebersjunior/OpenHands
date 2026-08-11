@@ -43,5 +43,12 @@
   "telemetry": {
     "posthogApiKey": "phc_kBtz5nKmxVRRQ7HtPwr2QX9eMC5j65zE86QKocVNwb4U",
     "posthogHost": "https://us.i.posthog.com"
+  },
+  "pentest": {
+    "_comment": "PROJETOSIN-193 — Electron host Docker Compose path allowlist (tilde expanded at runtime). OH_CANVAS_SAFE_STATE_DIR is also accepted when set.",
+    "electronComposeRoots": [
+      "~/.openhands/engagements",
+      "~/.openhands/agent-canvas"
+    ]
   }
 }

@@ -46,6 +46,7 @@ import { chmodSync, existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { spawnSync } from "node:child_process";
+import { registerPentestIpc } from "./pentest-ipc/index.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -347,6 +348,9 @@ function createMainWindow(ingressUrl = "http://localhost:8000") {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
+      // Pentest Docker/ADB bridge (PROJETOSIN-193). Separate from boot-log
+      // preload.cjs on the loading splash — do not merge the two.
+      preload: join(__dirname, "pentest-preload.cjs"),
     },
   });
 
@@ -514,6 +518,17 @@ ipcMain.handle("boot-log:copy", (event) => {
 ipcMain.handle("boot-log:quit", (event) => {
   if (!isLoadingWinEvent(event)) return;
   app.quit();
+});
+
+// ── Pentest Electron IPC (PROJETOSIN-193) ─────────────────────────────────────
+// Feature-flagged (PENTEST_ELECTRON_HOOKS_ENABLED=true). Default off.
+// boot-log:* handlers above stay isolated to the loading window.
+registerPentestIpc({
+  ipcMain,
+  getMainWebContents: () =>
+    mainWin && !mainWin.isDestroyed() ? mainWin.webContents : null,
+  defaultsPath,
+  isElectronDesktop: true,
 });
 
 // ── Backend stack ─────────────────────────────────────────────────────────────
