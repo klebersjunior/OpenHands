@@ -22,6 +22,8 @@ ACTIVE_TOOLS = frozenset(
         "adb_shell_mutant",
         "frida_attach",
         "mobsf_dynamic",
+        # mcp-engine (PROJETOSIN-197)
+        "engine_exploit",
     }
 )
 # Outside MVP Fase 1 — autonomous mode does not block extra tools yet.

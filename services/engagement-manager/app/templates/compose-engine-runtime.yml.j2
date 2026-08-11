@@ -1,0 +1,71 @@
+{# Optional engine runtime (PROJETOSIN-197). Containers stay on engagement
+   networks only — no host network / host publish. LLM via LiteLLM env from
+   secret store (never Ollama). CAI is a compose profile. #}
+services:
+  {{ project }}-runtime:
+    image: {{ runtime_image }}
+    networks:
+      - {{ network_internal }}
+      - {{ network_egress }}
+    environment:
+      ALLOW_RULES: {{ allow_rules | tojson }}
+      DENY_RULES: {{ deny_rules | tojson }}
+      PENTEST_SCOPE_ALLOWLIST: {{ allow_rules | tojson }}
+      PENTEST_AUTONOMY_MODE: "{{ autonomy_mode }}"
+      PENTEST_MCP_ENGINE_CMD: "{{ mcp_engine_cmd | default('') }}"
+      PENTEST_ENGINE_PENTESTAGENT_URL: "http://{{ project }}-engine-pentestagent:8080"
+      PENTEST_ENGINE_CAI_ENABLED: "{{ cai_enabled | default('false') }}"
+{% if cai_enabled | default(false) %}
+      PENTEST_ENGINE_CAI_URL: "http://{{ project }}-engine-cai:8080"
+{% endif %}
+      ENGAGEMENT_ID: "{{ engagement_id | default('') }}"
+      FINDINGS_SERVICE_URL: "{{ findings_service_url | default('http://findings-service:8000') }}"
+      SESSION_API_KEY: "{{ session_api_key | default('') }}"
+    depends_on:
+      - {{ project }}-engine-pentestagent
+    labels:
+      heimdall.runtime.profile: "engine"
+
+  {{ project }}-engine-pentestagent:
+    image: {{ pentestagent_image }}
+    networks:
+      - {{ network_internal }}
+      - {{ network_egress }}
+    environment:
+      PENTEST_AUTONOMY_MODE: "{{ autonomy_mode }}"
+      PENTEST_SCOPE_ALLOWLIST: {{ allow_rules | tojson }}
+      # Enterprise LLM only — inject LiteLLM/provider URLs from EngMgr secrets.
+      LITELLM_BASE_URL: "{{ litellm_base_url | default('') }}"
+      LITELLM_API_KEY: "{{ litellm_api_key | default('') }}"
+    volumes:
+      - {{ volume_prefix }}-engine-data:/opt/engines
+    labels:
+      heimdall.engine.id: "pentestagent"
+
+{% if cai_enabled | default(false) %}
+  {{ project }}-engine-cai:
+    image: {{ cai_image }}
+    profiles: ["engine-cai"]
+    networks:
+      - {{ network_internal }}
+      - {{ network_egress }}
+    environment:
+      PENTEST_AUTONOMY_MODE: "{{ autonomy_mode }}"
+      PENTEST_SCOPE_ALLOWLIST: {{ allow_rules | tojson }}
+      LITELLM_BASE_URL: "{{ litellm_base_url | default('') }}"
+      LITELLM_API_KEY: "{{ litellm_api_key | default('') }}"
+    volumes:
+      - {{ volume_prefix }}-engine-data:/opt/engines
+    labels:
+      heimdall.engine.id: "cai"
+{% endif %}
+
+networks:
+  {{ network_internal }}:
+    driver: bridge
+    internal: true
+  {{ network_egress }}:
+    driver: bridge
+
+volumes:
+  {{ volume_prefix }}-engine-data:
