@@ -1,7 +1,16 @@
 import { afterAll, afterEach, beforeAll, beforeEach, vi } from "vitest";
 import { cleanup } from "@testing-library/react";
-import { server } from "#/mocks/node";
 import "@testing-library/jest-dom/vitest";
+
+// @mswjs/interceptors bakes `SUPPORTS_PROGRESS_EVENT = typeof ProgressEvent !==
+// "undefined"` at module-eval time. jsdom provides ProgressEvent, so the flag
+// becomes true; later file teardown deletes the global, and late XHR callbacks
+// hit `ReferenceError: ProgressEvent is not defined` (Ubuntu CI,
+// home-chat-launcher). Strip it BEFORE loading MSW so createEvent permanently
+// uses the built-in ProgressEventPolyfill.
+Reflect.deleteProperty(globalThis, "ProgressEvent");
+
+const { server } = await import("#/mocks/node");
 
 // Some modules read env at import time before Vitest's per-test hooks run.
 // The beforeEach below restores the same default after tests call
@@ -60,11 +69,9 @@ if (typeof requestAnimationFrame === "undefined") {
   );
 }
 
-// MSW's XMLHttpRequest interceptor may dispatch progress events while
-// Vitest/jsdom is tearing down globals between files (or after afterAll).
-// Always reinstall a process-level ProgressEvent outside `vi.stubGlobal()`
-// so late interceptor callbacks do not hit `ReferenceError: ProgressEvent is
-// not defined` (seen on ubuntu CI via home-chat-launcher → @mswjs/interceptors).
+// Optional global for app code that constructs ProgressEvent directly. MSW's
+// createEvent path no longer depends on this (see delete above). Keep it
+// outside `vi.stubGlobal()` so `vi.unstubAllGlobals()` does not remove it.
 class MockProgressEvent extends Event {
   readonly lengthComputable: boolean;
 
@@ -84,6 +91,7 @@ function installProgressEventPolyfill(): void {
   Object.defineProperty(globalThis, "ProgressEvent", {
     configurable: true,
     writable: true,
+    enumerable: false,
     value: MockProgressEvent,
   });
 }
@@ -154,7 +162,7 @@ afterEach(async () => {
   // tests that install fake timers.
   await Promise.resolve();
   await Promise.resolve();
-  // jsdom file teardown can drop ProgressEvent; reinstall before late MSW XHR.
+  // Restore for app code after jsdom file teardown may have dropped it.
   installProgressEventPolyfill();
 });
 afterAll(() => {
