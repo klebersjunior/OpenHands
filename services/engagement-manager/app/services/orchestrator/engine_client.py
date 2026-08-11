@@ -35,6 +35,7 @@ class EngineRun:
     status: EngineRunStatus
     summary: str | None = None
     finding_ids: list[str] = field(default_factory=list)
+    targets: list[str] = field(default_factory=list)
     error_code: str | None = None
     error_message: str | None = None
 
@@ -146,6 +147,7 @@ class EngineClient:
             status="succeeded",
             summary=f"stub:{normalized}",
             finding_ids=[],
+            targets=list(targets or []),
         )
         self._runs[run_id] = run
         return EngineStartResult(ok=True, run=run)

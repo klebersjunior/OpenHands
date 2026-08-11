@@ -34,9 +34,9 @@ uvicorn app.main:app --reload --port 18003
 - `POST /api/pentest/engagements/{id}/provision` — provisionar sandbox Docker
 - `POST /api/pentest/engagements/{id}/teardown` — derrubar sandbox (`compose down -v`)
 - `GET /api/pentest/engagements/{id}/orchestration/playbooks` — catálogo MVP (+ merge stub 197)
-- `POST /api/pentest/engagements/{id}/orchestration/runs` — iniciar playbook (`pentest.scan.passive`)
-- `GET /api/pentest/engagements/{id}/orchestration/runs/{run_id}` — estado + steps
-- `POST /api/pentest/engagements/{id}/orchestration/runs/{run_id}/advance` — gate confirmation
+- `POST /api/pentest/engagements/{id}/orchestration/runs` — iniciar playbook (`pentest.scan.passive`). Body `{ playbook_id, targets? }`: se `targets` omitido/vazio, o EngMgr **hidrata** a partir das regras `allow` do scope do engagement e persiste em `orchestration_runs.targets` (fail-closed `targets_required` se irresolvível).
+- `GET /api/pentest/engagements/{id}/orchestration/runs/{run_id}` — estado + steps + `targets` persistidos
+- `POST /api/pentest/engagements/{id}/orchestration/runs/{run_id}/advance` — gate confirmation; **revalida** os mesmos `targets` persistidos contra a allowlist antes de `engine_start_phase`
 - `POST /api/pentest/engagements/{id}/orchestration/runs/{run_id}/cancel` — cancelar
 
 Prefixo EngMgr real é `/api/pentest/engagements/.../orchestration` (ingress). Spec 196 usa o shorthand `/api/engagements/.../orchestration`.

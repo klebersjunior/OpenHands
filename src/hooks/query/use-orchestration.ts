@@ -101,6 +101,8 @@ export function useOrchestration(options: {
   }, [engagementId, queryClient, resolvedRunId]);
 
   const startMutation = useMutation({
+    // FE may omit targets: EngMgr hydrates from engagement scope allowlist
+    // (fail-closed if empty). See CreateOrchestrationRunPayload.targets.
     mutationFn: (playbookId: string) =>
       OrchestrationService.createRun(engagementId!, {
         playbook_id: playbookId,

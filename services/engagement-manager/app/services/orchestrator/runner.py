@@ -71,19 +71,64 @@ class OrchestratorService:
             return "ip"
         return "domain"
 
+    def _resolve_targets(
+        self,
+        payload_targets: list[str] | None,
+        rules: list[tuple[str, str, str]],
+    ) -> list[str]:
+        """Resolve non-empty in-scope target list for a run.
+
+        Choice (PROJETOSIN-196 AppSec): when the client omits targets or sends
+        an empty list, EngMgr **hydrates** from engagement scope allow-rule
+        ``target_value`` entries and persists them on the run. Fail-closed if
+        the result is empty (no client targets and no allow rules).
+        """
+        seen: set[str] = set()
+        resolved: list[str] = []
+
+        def _add(raw: str) -> None:
+            value = raw.strip()
+            if value and value not in seen:
+                seen.add(value)
+                resolved.append(value)
+
+        for t in payload_targets or []:
+            _add(t)
+
+        if resolved:
+            return resolved
+
+        for rule_type, _ttype, tval in rules:
+            if rule_type == "allow":
+                _add(tval)
+        return resolved
+
+    def _target_in_scope(
+        self,
+        rules: list[tuple[str, str, str]],
+        target: str,
+    ) -> bool:
+        """True if target matches allowlist (exact allow value or typed match)."""
+        # Exact allow-rule value (scope hydration, incl. CIDR literals).
+        if any(r[0] == "allow" and r[2] == target for r in rules):
+            if any(r[0] == "deny" and r[2] == target for r in rules):
+                return False
+            return True
+        ttype = self._infer_target_type(target)
+        return is_target_allowed(rules, target_type=ttype, target_value=target)
+
     def _validate_targets(
         self,
         rules: list[tuple[str, str, str]],
         targets: list[str],
     ) -> str | None:
-        """Return scope_violation message if any target fails allowlist."""
+        """Return error message if targets empty or any fails allowlist (fail-closed)."""
         if not targets:
-            return None
+            return "No targets resolved (fail-closed)"
         if not rules:
             return "No scope rules configured (fail-closed)"
         for target in targets:
-            ttype = self._infer_target_type(target)
-            if not is_target_allowed(rules, target_type=ttype, target_value=target):
+            if not self._target_in_scope(rules, target):
                 return f"Target out of scope: {target}"
         return None
 
@@ -146,8 +191,13 @@ class OrchestratorService:
                 raise HTTPException(status_code=400, detail="Invalid start_phase")
             start_idx = ids.index(payload.start_phase)
 
-        targets = list(payload.targets or [])
         rules = await self._scope_rules(engagement_id)
+        targets = self._resolve_targets(payload.targets, rules)
+        if not targets:
+            raise HTTPException(
+                status_code=400,
+                detail="targets_required",
+            )
 
         run = OrchestrationRun(
             engagement_id=engagement_id,
@@ -156,6 +206,7 @@ class OrchestratorService:
             engine_id=engine_id,
             status="pending",
             current_phase=None,
+            targets=list(targets),
             finding_ids=[],
             created_by=user_id,
         )
@@ -277,17 +328,19 @@ class OrchestratorService:
                 await self.db.commit()
                 return
 
-            # Scope allowlist (AC-196-3) — fail closed before engine call
+            # Scope allowlist (AC-196-3) — fail closed before every engine call
             scope_err = self._validate_targets(rules, targets)
-            if scope_err is None and targets:
-                # Also let stub reject forced violations
-                pass
             if scope_err:
+                code = (
+                    "targets_required"
+                    if scope_err.startswith("No targets")
+                    else "scope_violation"
+                )
                 step.status = "failed"
-                step.error_code = "scope_violation"
+                step.error_code = code
                 step.error_message = scope_err
                 run.status = "failed"
-                run.error_code = "scope_violation"
+                run.error_code = code
                 run.error_message = scope_err
                 run.current_phase = step.phase_id
                 run.updated_at = datetime.now(timezone.utc)
@@ -303,7 +356,7 @@ class OrchestratorService:
                 engine_id=run.engine_id,
                 phase=step.engine_phase,
                 playbook_id=run.playbook_id,
-                targets=targets or None,
+                targets=list(targets),
             )
             if not result.ok or result.run is None:
                 code = result.error_code or "engine_error"
@@ -390,7 +443,6 @@ class OrchestratorService:
         *,
         user_id: str,
         capabilities: list[PentestCapability] | list[str],
-        targets: list[str] | None = None,
     ) -> OrchestrationRun:
         eng = await self._get_engagement(engagement_id, user_id=user_id)
         run = await self.get_run(engagement_id, run_id, user_id=user_id)
@@ -409,6 +461,14 @@ class OrchestratorService:
         if waiting is None:
             raise HTTPException(status_code=400, detail="No step awaiting confirmation")
 
+        # Reuse persisted targets only — never accept client override on advance.
+        targets = [t for t in (run.targets or []) if isinstance(t, str) and t.strip()]
+        if not targets:
+            raise HTTPException(
+                status_code=400,
+                detail="targets_required",
+            )
+
         waiting.status = "pending"
         rules = await self._scope_rules(engagement_id)
         await self._execute_from(
@@ -416,7 +476,7 @@ class OrchestratorService:
             run,
             playbook,
             start_idx=waiting.sequence,
-            targets=list(targets or []),
+            targets=targets,
             rules=rules,
             capabilities=capabilities,
             confirmed=True,

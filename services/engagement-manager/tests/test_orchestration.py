@@ -259,3 +259,113 @@ async def test_view_only_cannot_start_run(client):
         headers=auth_headers("client"),
     )
     assert resp.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_empty_targets_without_scope_fail_closed(client):
+    """Omit/empty targets + no allow rules → 400 targets_required (fail-closed)."""
+    eng_id = await _create_engagement(client)
+    resp = await client.post(
+        f"/api/pentest/engagements/{eng_id}/orchestration/runs",
+        json={"playbook_id": "web-passive-mvp"},
+        headers=auth_headers(),
+    )
+    assert resp.status_code == 400
+    assert resp.json()["detail"] == "targets_required"
+
+
+@pytest.mark.asyncio
+async def test_empty_targets_hydrates_from_scope_allowlist(client):
+    """UI path: omit targets → hydrate from engagement allow rules and persist."""
+    eng_id = await _create_engagement(client)
+    await _authorize_scope(client, eng_id, domain="example.com")
+
+    created = await client.post(
+        f"/api/pentest/engagements/{eng_id}/orchestration/runs",
+        json={"playbook_id": "web-passive-mvp"},
+        headers=auth_headers(),
+    )
+    assert created.status_code == 201
+    run_id = created.json()["run_id"]
+
+    detail = await client.get(
+        f"/api/pentest/engagements/{eng_id}/orchestration/runs/{run_id}",
+        headers=auth_headers(),
+    )
+    assert detail.status_code == 200
+    data = detail.json()
+    assert data["targets"] == ["example.com"]
+    assert data["status"] in (
+        "awaiting_confirmation",
+        "running",
+        "succeeded",
+    )
+
+
+@pytest.mark.asyncio
+async def test_advance_reuses_persisted_targets(client):
+    """advance() revalidates persisted targets; exploit receives same set."""
+    eng_id = await _create_engagement(client, autonomy_mode="semi_autonomous")
+    await _authorize_scope(client, eng_id)
+    engine = reset_engine_client()
+
+    created = await client.post(
+        f"/api/pentest/engagements/{eng_id}/orchestration/runs",
+        json={"playbook_id": "web-passive-mvp", "targets": ["example.com"]},
+        headers=auth_headers(),
+    )
+    assert created.status_code == 201
+    run_id = created.json()["run_id"]
+    assert created.json()["status"] == "awaiting_confirmation"
+
+    advanced = await client.post(
+        f"/api/pentest/engagements/{eng_id}/orchestration/runs/{run_id}/advance",
+        headers=auth_headers(),
+    )
+    assert advanced.status_code == 200
+    body = advanced.json()
+    assert body["targets"] == ["example.com"]
+    assert body["status"] in ("succeeded", "running")
+    exploit_runs = [r for r in engine._runs.values() if r.phase == "exploit"]
+    assert exploit_runs
+    assert exploit_runs[0].targets == ["example.com"]
+
+
+@pytest.mark.asyncio
+async def test_advance_without_persisted_targets_fail_closed(client):
+    """Legacy/empty persisted targets on advance → 400 targets_required."""
+    import uuid
+
+    from sqlalchemy import select
+
+    from app.db import SessionLocal
+    from app.models.orchestration import OrchestrationRun
+
+    eng_id = await _create_engagement(client, autonomy_mode="semi_autonomous")
+    await _authorize_scope(client, eng_id)
+
+    created = await client.post(
+        f"/api/pentest/engagements/{eng_id}/orchestration/runs",
+        json={"playbook_id": "web-passive-mvp", "targets": ["example.com"]},
+        headers=auth_headers(),
+    )
+    assert created.status_code == 201
+    run_id = created.json()["run_id"]
+    assert created.json()["status"] == "awaiting_confirmation"
+
+    async with SessionLocal() as session:
+        run = await session.scalar(
+            select(OrchestrationRun).where(
+                OrchestrationRun.id == uuid.UUID(run_id)
+            )
+        )
+        assert run is not None
+        run.targets = []
+        await session.commit()
+
+    advanced = await client.post(
+        f"/api/pentest/engagements/{eng_id}/orchestration/runs/{run_id}/advance",
+        headers=auth_headers(),
+    )
+    assert advanced.status_code == 400
+    assert advanced.json()["detail"] == "targets_required"

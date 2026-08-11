@@ -51,6 +51,8 @@ class CreateRunRequest(BaseModel):
     domain: str | None = None
     engine_id: str | None = None
     start_phase: str | None = None
+    # Optional: when omitted/empty, EngMgr hydrates from engagement scope
+    # allow-rule target_values (fail-closed if none). Always revalidated.
     targets: list[str] | None = None
     # Ignored if present — autonomy is server-side only (engagement + env).
     autonomy_mode: str | None = None
@@ -86,6 +88,7 @@ class OrchestrationRunOut(BaseModel):
     engine_id: str
     status: str
     current_phase: str | None
+    targets: list[str] = Field(default_factory=list)
     finding_ids: list[Any] = Field(default_factory=list)
     error_code: str | None = None
     error_message: str | None = None

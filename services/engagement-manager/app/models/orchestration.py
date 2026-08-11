@@ -28,6 +28,8 @@ class OrchestrationRun(Base):
     engine_id: Mapped[str] = mapped_column(String(64), nullable=False)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending")
     current_phase: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # In-scope targets for this run (client-supplied or hydrated from allowlist).
+    targets: Mapped[list[Any]] = mapped_column(JSON, nullable=False, default=list)
     finding_ids: Mapped[list[Any]] = mapped_column(JSON, nullable=False, default=list)
     error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
