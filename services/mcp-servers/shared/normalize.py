@@ -24,6 +24,9 @@ SOURCE_TOOLS = frozenset(
         "trivy",
         "nmap",
         "mobsf",
+        # mcp-engine (PROJETOSIN-197)
+        "pentestagent",
+        "cai",
     }
 )
 

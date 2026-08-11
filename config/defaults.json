@@ -17,7 +17,10 @@
     "agentCanvas": "ghcr.io/openhands/agent-canvas",
     "_comment_mobile": "PROJETOSIN-191 — EngMgr compose-mobile-runtime pins (no host publish). Override via ANDROID_EMULATOR_IMAGE / MOBSF_IMAGE env on EngMgr.",
     "androidEmulator": "budtmo/docker-android:emulator_13.0",
-    "mobsf": "opensecurity/mobile-security-framework-mobsf:latest"
+    "mobsf": "opensecurity/mobile-security-framework-mobsf:latest",
+    "_comment_engines": "PROJETOSIN-197 — engine runtime pins (no secrets). Override via PENTESTAGENT_IMAGE / CAI_IMAGE on EngMgr.",
+    "pentestAgent": "ghcr.io/heimdall/pentestagent:latest",
+    "cai": "ghcr.io/heimdall/cai:latest"
   },
   "ports": {
     "agentServer": 18000,
@@ -50,11 +53,23 @@
       "~/.openhands/engagements",
       "~/.openhands/agent-canvas"
     ],
+    "engines": {
+      "_comment": "PROJETOSIN-197 — mcp-engine motor pins (tags only; no secrets). Compose: services/engagement-manager/app/templates/compose-engine-runtime.yml.j2",
+      "pentestagent": {
+        "imageKey": "pentestAgent",
+        "defaultEnabled": true
+      },
+      "cai": {
+        "imageKey": "cai",
+        "defaultEnabled": false,
+        "envFlag": "PENTEST_ENGINE_CAI_ENABLED"
+      }
+    },
     "otel": {
       "_comment": "PROJETOSIN-199 — OTLP export to existing Heimdall SigNoz. Empty endpoint = no-op exporter (CI-safe). Does not provision SigNoz. Separate from PostHog product analytics.",
       "enabled": null,
-      "exporterOtlpEndpoint": "",
-      "exporterOtlpHeaders": "",
+      "defaultOtlpEndpoint": "",
+      "defaultOtlpHeaders": "",
       "llmBodies": false,
       "deploymentMode": "dev"
     }
