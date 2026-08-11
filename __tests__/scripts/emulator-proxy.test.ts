@@ -25,6 +25,15 @@ describe("emulator-proxy helpers", () => {
     expect(
       rewriteEmulatorProxyPath(`${EMULATOR_PROXY_PATH_PREFIX}/index.html`),
     ).toBe("/index.html");
+    expect(
+      rewriteEmulatorProxyPath(`${EMULATOR_PROXY_PATH_PREFIX}/websockify`),
+    ).toBe("/websockify");
+  });
+
+  it("uses a noVNC 1.7 relative websockify path", () => {
+    expect(EMULATOR_IFRAME_PATH).toBe(
+      "/api/emulator/vnc.html?autoconnect=1&reconnect=1&path=websockify",
+    );
   });
 
   it("identifies static assets", () => {

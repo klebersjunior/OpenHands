@@ -25,7 +25,11 @@ import { readCookie } from "./desktop-proxy.mjs";
 
 export const EMULATOR_PROXY_PATH_PREFIX = "/api/emulator";
 export const EMULATOR_AUTH_COOKIE = "agent-canvas-emulator-auth";
-export const EMULATOR_IFRAME_PATH = `${EMULATOR_PROXY_PATH_PREFIX}/?autoconnect=1&reconnect=1&path=api/emulator/websockify`;
+// noVNC 1.7 resolves `path` against the iframe URL. A value of
+// `api/emulator/websockify` becomes `/api/emulator/api/emulator/websockify`
+// and the upstream 404s ("Failed to connect to server"). Relative
+// `websockify` from `/api/emulator/vnc.html` is the correct WS target.
+export const EMULATOR_IFRAME_PATH = `${EMULATOR_PROXY_PATH_PREFIX}/vnc.html?autoconnect=1&reconnect=1&path=websockify`;
 
 const AUTH_CACHE_TTL_MS = 30_000;
 const DEFAULT_HEALTH_TIMEOUT_MS = 2_000;

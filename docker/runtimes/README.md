@@ -159,7 +159,9 @@ adb connect 127.0.0.1:5555
 
 Inside the compose network: `ADB_HOST=android-emulator` `ADB_PORT=5555`,
 `EMULATOR_NOVNC_URL=http://android-emulator:6080`.
-Windows/Docker Desktop: no `/dev/kvm` — fragment uses `privileged: true` + `EMULATOR_ACCEL=false`.
+Windows/Docker Desktop (WSL2) often exposes `/dev/kvm`. The fragment runs a
+Heimdall entrypoint that restores `root` in `/etc/passwd` — stock budtmo deletes
+that line on first start and the emulator never comes back after `compose restart`.
 
 ### Local all-in-one (web / network / sast)
 

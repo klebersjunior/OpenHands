@@ -125,6 +125,6 @@ export class EmulatorService {
 
   /** Same-origin iframe path after /start sets the auth cookie. */
   static iframePath(): string {
-    return `${EMULATOR_PROXY_BASE}/?autoconnect=1&reconnect=1&path=api/emulator/websockify`;
+    return `${EMULATOR_PROXY_BASE}/vnc.html?autoconnect=1&reconnect=1&path=websockify`;
   }
 }

@@ -8,8 +8,9 @@
 # budtmo ships noVNC on :6080 (Emulator tab via /api/emulator) and ADB on :5555
 # (mcp-mobile). Pin matches config/defaults.json → images.androidEmulator.
 #
-# Windows / Docker Desktop: no /dev/kvm — privileged + EMULATOR_ACCEL=false.
-# Linux hosts can add an override with `devices: [/dev/kvm]`.
+# Windows / Docker Desktop (WSL2): /dev/kvm is often present. The custom
+# entrypoint restores root in /etc/passwd (budtmo deletes it on first start)
+# so compose restart does not kill the emulator. privileged is still required.
 #
 # First boot pulls several GB and can take 1–3 min.
 
@@ -19,11 +20,16 @@ services:
     image: ${ANDROID_EMULATOR_IMAGE:-budtmo/docker-android:emulator_13.0}
     container_name: android-emulator
     privileged: true
+    user: "0:0"
+    entrypoint: ["/bin/sh", "/opt/heimdall/emulator-entrypoint.sh"]
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
       - "127.0.0.1:${ANDROID_ADB_HOST_PORT:-5555}:5555"
       - "127.0.0.1:${ANDROID_NOVNC_HOST_PORT:-6080}:6080"
+    volumes:
+      - ./emulator-entrypoint.sh:/opt/heimdall/emulator-entrypoint.sh:ro
+      - ./sudo-guard.sh:/opt/heimdall/sudo-guard.sh:ro
     environment:
       EMULATOR_DEVICE: ${ANDROID_EMULATOR_DEVICE:-Samsung Galaxy S10}
       WEB_VNC: ${ANDROID_EMULATOR_WEB_VNC:-true}
