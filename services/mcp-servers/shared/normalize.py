@@ -24,6 +24,8 @@ SOURCE_TOOLS = frozenset(
         "trivy",
         "nmap",
         "mobsf",
+        "openvas",
+        "metasploit",
     }
 )
 

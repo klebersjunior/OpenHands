@@ -11,6 +11,7 @@ from app.config import get_settings
 from app.models.engagement import Engagement, ScopeRule
 from app.services.runtime_provisioner import (
     DRY_RUN_MOBSF_API_KEY,
+    DRY_RUN_MSF_RPC_TOKEN,
     RuntimeProvisioner,
     build_mobile_network_metadata,
 )
@@ -301,3 +302,67 @@ def test_ac191_slow_emulator_flag_omits_kvm_device(monkeypatch, tmp_path):
     text = provisioner._render(eng, _allow_rules(eng.id))
     assert "/dev/kvm" not in text
     assert "EMULATOR_ACCEL" in text
+
+
+def _network_engagement() -> Engagement:
+    eng = Engagement(
+        name="network-t",
+        client_name="c",
+        created_by="u",
+        runtime_profile="network",
+    )
+    eng.id = uuid.uuid4()
+    return eng
+
+
+def _network_allow_rules(eng_id: uuid.UUID) -> list[ScopeRule]:
+    return [
+        ScopeRule(
+            engagement_id=eng_id,
+            rule_type="allow",
+            target_type="cidr",
+            target_value="10.0.0.0/8",
+        )
+    ]
+
+
+@pytest.mark.asyncio
+async def test_ac198_network_compose_profiles_no_host_network(tmp_path):
+    """AC-198-5 — network compose renders without host network; profiles gvm/msf."""
+    provisioner = RuntimeProvisioner(
+        dry_run=True,
+        templates_dir=_templates_dir(),
+    )
+    provisioner.work_root = tmp_path
+    eng = _network_engagement()
+    project = await provisioner.provision(eng, _network_allow_rules(eng.id))
+    text = (tmp_path / project / "docker-compose.yml").read_text(encoding="utf-8")
+
+    assert f"{project}-runtime:" in text
+    assert f"{project}-gvm:" in text
+    assert f"{project}-msfrpcd:" in text
+    assert 'profiles: ["gvm"]' in text
+    assert 'profiles: ["msf"]' in text
+    assert "ghcr.io/heimdall/runtime-network:latest" in text
+    assert "greenbone/gvmd:stable" in text
+    assert "PENTEST_MCP_NETWORK_CMD:" in text
+    assert "MSF_RPC_HOST:" in text
+    assert DRY_RUN_MSF_RPC_TOKEN in text
+    assert "network_mode: host" not in text
+    assert "docker.sock" not in text
+    assert "ports:" not in text
+    assert "internal: true" in text
+
+
+def test_ac198_defaults_json_network_pins():
+    """AC-198 — network image/port pins live in config/defaults.json."""
+    root = Path(__file__).resolve().parents[3]
+    defaults = json.loads(
+        (root / "config" / "defaults.json").read_text(encoding="utf-8")
+    )
+    assert defaults["images"]["runtimeNetwork"] == (
+        "ghcr.io/heimdall/runtime-network:latest"
+    )
+    assert defaults["images"]["gvm"] == "greenbone/gvmd:stable"
+    assert defaults["ports"]["msfRpc"] == 55553
+    assert defaults["pentest"]["network"]["gvmMinRamGb"] == 8

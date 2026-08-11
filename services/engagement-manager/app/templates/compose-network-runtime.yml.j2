@@ -1,3 +1,10 @@
+{# Network engagement sandbox (PROJETOSIN-198).
+   - Default: nmap-capable runtime (ghcr.io/heimdall/runtime-network).
+   - Optional Compose profiles:
+       gvm  — Greenbone/GVM sidecar (heavy; typically ≥8GB RAM; default off).
+       msf  — msfrpcd on internal network only (no host publish).
+   - No network_mode: host. No Docker socket mount.
+#}
 services:
   {{ project }}-runtime:
     image: {{ runtime_image }}
@@ -7,7 +14,50 @@ services:
     environment:
       ALLOW_RULES: {{ allow_rules | tojson }}
       DENY_RULES: {{ deny_rules | tojson }}
+      PENTEST_SCOPE_ALLOWLIST: "{{ scope_allowlist }}"
       PENTEST_AUTONOMY_MODE: "{{ autonomy_mode }}"
+      ENGAGEMENT_ID: "{{ engagement_id }}"
+      FINDINGS_SERVICE_URL: "{{ findings_service_url }}"
+      SESSION_API_KEY: "{{ session_api_key }}"
+      PENTEST_MCP_NETWORK_CMD: "{{ mcp_network_cmd | default('') }}"
+      MCP_NETWORK_USE_REAL_BINARIES: "{{ mcp_network_use_real_binaries | default('0') }}"
+      GVM_URL: "http://{{ project }}-gvm:9392"
+      GVM_USER: "{{ gvm_user }}"
+      GVM_PASSWORD: "{{ gvm_password }}"
+      MSF_RPC_HOST: "{{ project }}-msfrpcd"
+      MSF_RPC_PORT: "{{ msf_rpc_port }}"
+      MSF_RPC_TOKEN: "{{ msf_rpc_token }}"
+    labels:
+      heimdall.runtime.profile: "network"
+      heimdall.runtime.compose_profiles: "gvm,msf"
+
+  # Optional GVM/OpenVAS stack — enable with: docker compose --profile gvm up -d
+  # Minimum RAM guidance: {{ gvm_min_ram_gb }}GB+. Not started in lightweight/dev defaults.
+  {{ project }}-gvm:
+    profiles: ["gvm"]
+    image: {{ gvm_image }}
+    networks:
+      - {{ network_internal }}
+    environment:
+      GVM_USER: "{{ gvm_user }}"
+      GVM_PASSWORD: "{{ gvm_password }}"
+    labels:
+      heimdall.gvm.url_internal: "http://{{ project }}-gvm:9392"
+      heimdall.gvm.min_ram_gb: "{{ gvm_min_ram_gb }}"
+
+  # Optional Metasploit RPC — enable with: docker compose --profile msf up -d
+  # Bound only to the engagement internal network (no host ports / no host network).
+  {{ project }}-msfrpcd:
+    profiles: ["msf"]
+    image: {{ runtime_image }}
+    networks:
+      - {{ network_internal }}
+    environment:
+      MSF_PASSWORD: "{{ msf_rpc_token }}"
+      MSF_RPC_PORT: "{{ msf_rpc_port }}"
+      HEALTHZ_PORT: "8091"
+    labels:
+      heimdall.msf.rpc_internal: "{{ project }}-msfrpcd:{{ msf_rpc_port }}"
 
 networks:
   {{ network_internal }}:

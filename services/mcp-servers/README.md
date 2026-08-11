@@ -1,4 +1,4 @@
-# MCP Servers — Pentest (PROJETOSIN-187 / 189 / 190)
+# MCP Servers — Pentest (PROJETOSIN-187 / 189 / 190 / 198)
 
 stdio MCP servers for offensive runtimes. **ADR-0001**.
 
@@ -8,7 +8,8 @@ services/mcp-servers/
 ├── mcp-recon/       # subfinder / httpx / reconftw
 ├── mcp-webscan/     # ZAP / Nuclei / Wapiti / Nikto / sqlmap
 ├── mcp-sast/        # Semgrep + Trivy (PROJETOSIN-189)
-└── mcp-mobile/      # MobSF + ADB/Frida/apktool/jadx (PROJETOSIN-190)
+├── mcp-mobile/      # MobSF + ADB/Frida/apktool/jadx (PROJETOSIN-190)
+└── mcp-network/     # nmap / GVM(OpenVAS) / Metasploit RPC (PROJETOSIN-198)
 ```
 
 ## Capabilities
@@ -20,10 +21,15 @@ services/mcp-servers/
 | webscan active (`web_zap_active_scan`, `web_sqlmap_run`, nuclei intrusive) | `pentest.scan.active` |
 | `mcp-sast` (Semgrep / Trivy) | `pentest.sast.run` |
 | `mcp-mobile` (MobSF / ADB / Frida / apktool / jadx) | `pentest.mobile.dynamic` |
+| `mcp-network` nmap `discovery`/`safe` | `pentest.scan.passive` |
+| `mcp-network` nmap `full`, GVM start/report | `pentest.scan.active` |
+| `mcp-network` Metasploit RPC execute / sessions | `pentest.exploit.active` |
 
 Session registration should only attach a server when the authenticated profile
 has the minimum capability (Fase 0 RBAC). Without `pentest.mobile.dynamic`, the
-launcher must **not** attach `PENTEST_MCP_MOBILE_CMD`.
+launcher must **not** attach `PENTEST_MCP_MOBILE_CMD`. Without
+`pentest.scan.passive`, the launcher must **not** attach
+`PENTEST_MCP_NETWORK_CMD`.
 
 ## Environment
 
@@ -39,6 +45,7 @@ launcher must **not** attach `PENTEST_MCP_MOBILE_CMD`.
 | `PENTEST_MCP_WEBSCAN_CMD` | Override launch command for mcp-webscan |
 | `PENTEST_MCP_SAST_CMD` | Override launch command for mcp-sast |
 | `PENTEST_MCP_MOBILE_CMD` | Override launch command for mcp-mobile |
+| `PENTEST_MCP_NETWORK_CMD` | Override launch command for mcp-network |
 | `MOBSF_URL` | MobSF base URL (e.g. `http://mobsf:8000`); required for MobSF tools |
 | `MOBSF_API_KEY` | MobSF API key (env only; never hardcoded) |
 | `ADB_HOST` | Generic ADB endpoint host (default `android-emulator`) |
@@ -46,6 +53,10 @@ launcher must **not** attach `PENTEST_MCP_MOBILE_CMD`.
 | `PENTEST_ADB_TARGET` | `emulator` (default) \| `physical` — when `physical`, Desktop injects `ADB_HOST=host.docker.internal` (Opção B / PROJETOSIN-194) so mcp-mobile keeps one ADB adapter |
 | `MCP_WEBSCAN_TIMEOUT_SEC` | Timeout for intrusive web tools (default 300) |
 | `MCP_MOBILE_USE_REAL_BINARIES` | Set `1` to invoke real `adb`/`apktool`/`jadx`/`frida` |
+| `MCP_NETWORK_USE_REAL_BINARIES` | Set `1` for real nmap / GVM / msfrpcd (default `0` — stub fixtures for CI) |
+| `NMAP_BIN` | Optional path to nmap |
+| `GVM_URL` / `GVM_USER` / `GVM_PASSWORD` | Internal GVM/GMP HTTP bridge (secrets env-only) |
+| `MSF_RPC_HOST` / `MSF_RPC_PORT` / `MSF_RPC_TOKEN` | Internal Metasploit RPC (token/password env-only) |
 | `DEFECTDOJO_API_URL` | One-way DefectDojo mirror base URL |
 | `DEFECTDOJO_API_TOKEN` | DefectDojo API token |
 | `DEFECTDOJO_PRODUCT_TYPE_DEFAULT` | Default product type (e.g. `Pentest`) |
@@ -75,6 +86,10 @@ export MOBSF_API_KEY=dev-mobsf-key
 export ADB_HOST=android-emulator
 export ADB_PORT=5555
 python services/mcp-servers/mcp-mobile/server.py
+
+export PYTHONPATH=services/mcp-servers:services/mcp-servers/mcp-network
+export MCP_NETWORK_USE_REAL_BINARIES=0
+python services/mcp-servers/mcp-network/server.py
 ```
 
 ## Register with Agent Canvas / Agent Server
@@ -87,6 +102,7 @@ PENTEST_MCP_RECON_CMD='python /opt/mcp-servers/mcp-recon/server.py'
 PENTEST_MCP_WEBSCAN_CMD='python /opt/mcp-servers/mcp-webscan/server.py'
 PENTEST_MCP_SAST_CMD='python /opt/mcp-servers/mcp-sast/server.py'
 PENTEST_MCP_MOBILE_CMD='python /opt/mcp-servers/mcp-mobile/server.py'
+PENTEST_MCP_NETWORK_CMD='python /opt/mcp-servers/mcp-network/server.py'
 ```
 
 Example `config.toml` fragment (engagement):
@@ -107,13 +123,18 @@ args = ["/opt/mcp-servers/mcp-sast/server.py"]
 [mcp.mcp-mobile]
 command = "python"
 args = ["/opt/mcp-servers/mcp-mobile/server.py"]
+
+[mcp.mcp-network]
+command = "python"
+args = ["/opt/mcp-servers/mcp-network/server.py"]
 ```
 
 ## Confirmation gate (stub)
 
 Intrusive tools (`zap_active_scan`, `sqlmap_run`, `nuclei_intrusive`,
-`mobsf_dynamic`, `adb_install`, `adb_shell_mutant`, `frida_attach`) in
-`semi_autonomous` mode return:
+`mobsf_dynamic`, `adb_install`, `adb_shell_mutant`, `frida_attach`,
+`net_nmap_scan` when profile=`full`, `net_gvm_start_scan`,
+`net_msf_rpc_execute`) in `semi_autonomous` mode return:
 
 ```json
 {"ok": false, "error": "confirmation_required", "request_id": "..."}
@@ -149,6 +170,17 @@ When conversation metadata sets `pentest_adb_target=physical`:
 Default `PENTEST_ADB_TARGET=emulator` keeps `ADB_HOST=android-emulator`.
 
 
+## Network runtime (PROJETOSIN-198)
+
+Compose template: `services/engagement-manager/app/templates/compose-network-runtime.yml.j2`.
+
+- Default stack: nmap-capable `runtime-network` (no host network, no Docker socket).
+- Compose profile `gvm`: optional Greenbone/GVM sidecar (heavy; ~8GB+ RAM).
+- Compose profile `msf`: `msfrpcd` on the **internal** engagement network only.
+- Metasploit modules are allowlisted (`auxiliary/`, `scanner/`, documented
+  `exploit/` prefixes). Free console / `setg` / arbitrary shell options are rejected.
+- CI uses `MCP_NETWORK_USE_REAL_BINARIES=0` (fixtures) — no live GVM/MSF daemons.
+
 ## Tests
 
 ```bash
@@ -156,4 +188,5 @@ cd services/mcp-servers/mcp-recon && PYTHONPATH=..:. pytest -q
 cd ../mcp-webscan && PYTHONPATH=..:. pytest -q
 cd ../mcp-sast && PYTHONPATH=..:. pytest -q
 cd ../mcp-mobile && PYTHONPATH=..:. pytest -q
+cd ../mcp-network && PYTHONPATH=..:. pytest -q
 ```

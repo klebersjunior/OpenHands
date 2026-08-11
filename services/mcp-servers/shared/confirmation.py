@@ -22,6 +22,10 @@ ACTIVE_TOOLS = frozenset(
         "adb_shell_mutant",
         "frida_attach",
         "mobsf_dynamic",
+        # mcp-network (PROJETOSIN-198) — nmap only when profile=full
+        "net_nmap_scan",
+        "net_gvm_start_scan",
+        "net_msf_rpc_execute",
     }
 )
 # Outside MVP Fase 1 — autonomous mode does not block extra tools yet.
