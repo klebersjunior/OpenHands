@@ -1,131 +1,120 @@
 ---
 card: PROJETOSIN-197
 pr: 15
-veredicto: FAIL
+veredicto: PASS
 agente: appsec
 data: 2026-08-10
-tip: 5f02d0748669ad835cdb0820acce5ab4b240b524
-ci: pytest mcp-engine local PoCs; npm audit N/A (delta Python)
+tip: 1555e4e2ce7f0f3e3e45a376ec679cea9b3d24e4
+ci: pytest mcp-engine 45 passed; PoCs HIGH-1/2/3 re-proved closed
 repo: klebersjunior/OpenHands
 branch: feat/fase4-mcp-engine-197
+prior: FAIL @ 5f02d0748 / laudo ccce59ba3
 ---
 
-# AppSecurity — PROJETOSIN-197 (mcp-engine PentestAgent / CAI)
+# AppSecurity — PROJETOSIN-197 (mcp-engine PentestAgent / CAI) — re-gate
 
-**Veredicto:** FAIL
+**Veredicto:** PASS
 
-**Revisor:** AppSec gate (≠ autor do commit de implementação). Não assina QA. Não mergeia.
+**Revisor:** AppSec gate (≠ autor do fix `1555e4e2c`). Não assina QA. Não mergeia.
 
-## Escopo
+**[GITHUB-REVIEW-PENDENTE]** — conta `gh` = autor do PR (`klebersjunior`); review formal REQUEST_CHANGES/APPROVE bloqueada. Veredicto e checklist neste laudo + comentário no PR.
 
-Spec `docs/specs/fase-4/197-mcp-engine-pentestagent-cai.md` + foco obrigatório do gate crítico:
+## Escopo (re-gate)
 
-1. Escopo fail-closed (`PENTEST_SCOPE_ALLOWLIST`) / bypass
-2. Autonomia server-side (`PENTEST_AUTONOMY_MODE`); rejeição de override em args/options
-3. SSRF / URL do motor (loopback, hosts internos, allowlist)
-4. Sem Ollama / self-hosted LLM; sem METATRON como motor
-5. Secrets (LiteLLM / `SESSION_API_KEY`) — sem hardcode; logs sem dump
-6. Confirmation gate em fase `exploit` (`engine_exploit` / `ACTIVE_TOOLS`)
-7. Superfície Docker/compose (sem `docker.sock`, sem host network)
-8. Achados só via Findings master
+Remediação dos HIGH do laudo FAIL anterior após `1555e4e2c` (`fix(mcp-engine): close AppSec HIGH scope/SSRF/Ollama`).
 
-Worktree `.tmp/worktrees/197` @ `5f02d07`. PR https://github.com/klebersjunior/OpenHands/pull/15
+1. HIGH-1 — targets vazios/None/omitidos → `invalid_targets` (não spawn)
+2. HIGH-2 — allowlist positiva `PENTEST_ENGINE_URL_ALLOWLIST`; rejeita 127.1, metadata, link-local
+3. HIGH-3 — OLLAMA_* / LITELLM localhost:11434 → `self_hosted_llm_forbidden`
+4. Residuais MEDIUM do laudo FAIL (não bloqueantes)
+
+Worktree `.tmp/worktrees/197` @ `1555e4e2c`. PR https://github.com/klebersjunior/OpenHands/pull/15
 
 ## Checklist
 
-- [x] Sem segredos LiteLLM / `SESSION_API_KEY` hardcoded no delta mcp-engine (pins só tags em `config/defaults.json`)
+- [x] Sem segredos LiteLLM / `SESSION_API_KEY` hardcoded no delta mcp-engine
 - [x] Compose engine sem `docker.sock` / sem `network_mode: host` / sem privileged
-- [x] Achados via `normalize_finding` + `FindingsClient` (sem DefectDojo / METATRON adapter)
-- [x] Confirmation: `engine_exploit` em `ACTIVE_TOOLS`; fase `exploit` chama `require_confirmation`
-- [ ] **FAIL** Escopo: `targets` vazio/`None` ignora allowlist e ainda spawna run
-- [ ] **FAIL** SSRF URL do motor: só denylist de 3 hostnames loopback; sem allowlist positiva; metadata / `127.1` passam
-- [ ] **FAIL** Ollama: `http://localhost:11434` e variantes sem substring `ollama` não são rejeitadas
-- [ ] Autonomia: top-level `options.autonomy_mode` rejeitado; nested / chaves LLM em `options` passam ao adapter (residual)
+- [x] Achados via `normalize_finding` + `FindingsClient`
+- [x] Confirmation: `engine_exploit` ∈ `ACTIVE_TOOLS`; fase `exploit` → `require_confirmation`
+- [x] **PASS** Escopo: `targets` vazio/`None`/omitido/`""` → `invalid_targets`; zero posts Findings
+- [x] **PASS** SSRF: allowlist positiva + bloqueio loopback/link-local/metadata/`127.1`/`0.0.0.0`/userinfo/https
+- [x] **PASS** Ollama: `OLLAMA_HOST` / `LITELLM_BASE_URL` com `localhost:11434` → `self_hosted_llm_forbidden`
+- [ ] Autonomia nested / chaves LLM em `options` — residual MEDIUM (inalterado)
 
-## Findings
+## Fechamento dos HIGH (PoCs re-provados)
 
-### HIGH-1 — Bypass de escopo via `targets` vazio ou omitido (BLOCK)
+### HIGH-1 — CLOSED
 
-**Onde:** `tools/start_phase.py` — loop `for target in target_list` só valida entradas presentes.
+**Controle:** `tools/start_phase.py` exige ≥1 target não-vazio antes de `assert_in_scope` / `registry.create`.
 
-**PoC (local, tip `5f02d07`):** com `PENTEST_SCOPE_ALLOWLIST=example.com`, `engine_start_phase(..., targets=[])` e `targets=None` retornam `ok: true` / `status: succeeded` e postam finding (mock). Zero `scope_violation`.
+**PoC @ `1555e4e2c`:**
 
-**Por que bloqueia:** Spec/AC-197-2 exigem fail-closed; motor não pode mirar fora do escopo. Omitir targets esvazia o gate — asserção “todo target passou por `assert_in_scope`” torna-se vácua quando a lista é vazia.
+| Input | Resultado |
+|-------|-----------|
+| `targets=[]` | `ok=false` `error=invalid_targets` posts=0 |
+| `targets=None` | `ok=false` `error=invalid_targets` posts=0 |
+| omitido | `ok=false` `error=invalid_targets` posts=0 |
 
-**Remediação:** Exigir ≥1 target in-scope antes de criar/spawnar run; rejeitar `targets` ausente/vazio com `scope_violation` (ou erro tipado equivalente fail-closed). Teste negativo que falhe se o controle sumir.
+Teste anti-vácuo: `test_high1_empty_or_omitted_targets_fail_closed`.
 
-### HIGH-2 — SSRF do control-plane incompleto (BLOCK)
+### HIGH-2 — CLOSED
 
-**Onde:** `adapters/pentestagent.py` / `adapters/cai.py` — `_is_loopback_url` só marca `127.0.0.1` | `localhost` | `::1`. `_run_remote` faz `httpx` POST para qualquer outra URL de env.
+**Controle:** `assert_allowed_engine_url` — scheme `http` only, sem userinfo, denylist metadata/loopback via `ipaddress` (incl. `127.1`, decimal IPv4), allowlist positiva `PENTEST_ENGINE_URL_ALLOWLIST` (fail-closed se vazia). Wired em `PentestAgentAdapter` / `CaiAdapter` (`status` + `_run_remote`). Compose injeta DNS do projeto.
 
-**PoC hostname check:**
+**PoC @ `1555e4e2c`:**
 
 | URL | Bloqueada? |
 |-----|------------|
 | `http://127.0.0.1:9999` | sim |
-| `http://127.1:9999` | **não** |
-| `http://0.0.0.0:9999` | **não** |
-| `http://169.254.169.254/...` | **não** |
-| `http://metadata.google.internal/` | **não** |
-| `http://engine-pentestagent:8080` | não (esperado se allowlisted) |
+| `http://127.1:9999` | **sim** |
+| `http://0.0.0.0:9999` | **sim** |
+| `http://169.254.169.254/...` | **sim** |
+| `http://metadata.google.internal/` | **sim** |
+| `http://engine-pentestagent:8080` (allowlisted) | não |
 
-**Por que bloqueia:** Foco obrigatório pede allowlist (loopback + hosts internos). Só denylist literal não impede metadata link-local nem encodings de loopback. Sem allowlist positiva (ex. hostname do serviço compose / rede do engagement), misconfig de env vira SSRF server-side.
+### HIGH-3 — CLOSED
 
-**Remediação:** Allowlist positiva de hosts/schemes (`http` only + nomes compose / DNS interno do engagement); rejeitar link-local (`169.254.0.0/16`, `fe80::/10`), loopback por `ipaddress` (não só strings), e URLs com userinfo ambíguo. Testes que quebrem se allowlist for removida.
+**Controle:** `assert_no_ollama_llm` — qualquer `OLLAMA_*` setado rejeita; bases LLM com host loopback + porta 11434 ou hostname contendo `ollama` rejeitam. `start_phase` retorna `self_hosted_llm_forbidden` antes do spawn.
 
-### HIGH-3 — Guard anti-Ollama / self-hosted furável (BLOCK)
+**PoC @ `1555e4e2c`:**
 
-**Onde:** `adapters/base.py` — `assert_no_ollama_llm()`.
+| Env | Resultado |
+|-----|-----------|
+| `OLLAMA_HOST=http://localhost:11434` | `self_hosted_llm_forbidden` |
+| `LITELLM_BASE_URL=http://localhost:11434` | `self_hosted_llm_forbidden` |
+| `OLLAMA_HOST=http://127.0.0.1:11434` | `self_hosted_llm_forbidden` |
+| `LITELLM_BASE_URL=https://litellm.heimdallsec.example/v1` | permitido |
 
-**PoC:**
+## Residuais (não bloqueiam)
 
-- `OLLAMA_HOST=http://localhost:11434` → **não** rejeita (`None`)
-- `LITELLM_BASE_URL=http://localhost:11434` → **não** rejeita
-- `OLLAMA_HOST=http://127.0.0.1:11434` → rejeita (substring/`11434` path parcial)
+### MEDIUM-1 — `options` nested / LLM override
 
-**Por que bloqueia:** Spec proíbe Ollama/self-hosted. `localhost:11434` é o default canônico do Ollama e passa no gate.
+Top-level `options.autonomy_mode` rejeitado. Nested `options.config.autonomy_mode` e chaves `LITELLM_*` / `llm_base_url` em `options` ainda podem ser encaminhadas ao motor remoto. Elevar a HIGH se o contrato do motor real preferir `options` ao env.
 
-**Remediação:** Parse de host/porta; bloquear `localhost`/`127.0.0.0/8`/`::1` + porta 11434; bloquear hostname contendo `ollama`; preferir allowlist de bases LiteLLM empresariais. Cobrir com teste que falhe se só o check de substring existir.
+### MEDIUM-2 — Compose scope allowlist CSV vs JSON
 
-### MEDIUM-1 — `options` nested / LLM override não filtrados
+`PENTEST_SCOPE_ALLOWLIST` via CSV no parser; template histórico com `tojson` em outros fluxos. Neste tip, `PENTEST_ENGINE_URL_ALLOWLIST` no compose é CSV de hostnames do projeto (OK). Manter alinhamento CSV único.
 
-Top-level `options.autonomy_mode` é rejeitado (bom; testado). Nested `options.config.autonomy_mode` e chaves `LITELLM_BASE_URL` / `llm_base_url` em `options` são aceitas e encaminhadas em `_run_remote` body. Quando o motor real preferir `options` ao env, reabre autonomia/LLM.
+### LOW — `engagement_id` fallback em `options` / `"unknown"`
 
-**Decisão:** residual MEDIUM até engines reais; elevar a HIGH se o contrato do motor ler autonomia/LLM de `options`.
+Correlação spoofável; não RCE.
 
-### MEDIUM-2 — Compose `PENTEST_SCOPE_ALLOWLIST: {{ allow_rules | tojson }}`
-
-`tojson` em lista produz JSON (`["a.com"]`), enquanto `_parse_allowlist` faz `split(",")`. Resultado típico: fail-closed operacional (não match), não bypass aberto. Risco de operadores “consertarem” com allowlist frouxa fora do parser.
-
-**Decisão:** MEDIUM ops/compat — alinhar CSV vs JSON num único contrato.
-
-### LOW — `engagement_id` fallback em `options`
-
-Se `ENGAGEMENT_ID` ausente, `options.engagement_id` ou `"unknown"` é usado. Correlação spoofável; não é RCE.
-
-### Controles OK (não bloqueantes)
+## Controles OK (mantidos)
 
 | Controle | Evidência |
 |---|---|
-| Autonomia top-level | `start_phase` rejeita `options.autonomy_mode`; schema MCP sem arg `autonomy_mode` |
-| Exploit confirmation | `EXPLOIT_GATE_TOOL="engine_exploit"` ∈ `ACTIVE_TOOLS`; semi sem token → `confirmation_required` (teste AC-197-3) |
-| Findings master | adapters usam `FindingsClient.post_finding`; grep sem DefectDojo/METATRON |
-| Compose superfície | `compose-engine-runtime.yml.j2`: bridge networks, sem sock/host/privileged |
-| Secrets no código | LiteLLM/session via env Jinja; sem hardcode no mcp-engine |
-| Eventos | `emit_run_event` sem prompts/secrets |
+| Autonomia top-level | `invalid_options` se `options.autonomy_mode` |
+| Exploit confirmation | AC-197-3 testes verdes |
+| Findings master | sem DefectDojo/METATRON adapter |
+| Compose superfície | bridge; sem sock/host/privileged |
 | CAI opt-in | flag off → `engine_not_enabled` |
 
 ## Dependências
 
-Delta é Python (`services/mcp-servers/mcp-engine`). `npm audit --audit-level=high` não cobre este PR; sem novas deps npm no diff. Pins de imagem só tags (sem secrets).
+Delta Python (`services/mcp-servers/mcp-engine`). `npm audit` N/A neste PR. Suíte local: **45 passed**.
 
-## Ação requerida
+## Ação
 
-**BLOCK merge** até remediar HIGH-1..HIGH-3 e re-gate AppSec (revisor ≠ autor).
+**AppSec PASS** — HIGH-1..HIGH-3 fechados com testes anti-remoção. Label `Blocked` removida no Plane.
 
-1. Fail-closed em `targets` vazio/ausente + teste anti-vácuo  
-2. Allowlist positiva + bloqueio link-local/loopback-IP para URL do motor  
-3. Fechar bypass Ollama `localhost:11434` / self-hosted loopback  
-4. (Recomendado) strip/deny de chaves sensíveis em `options` antes do forward remoto  
-
-**Não mergeado por AppSec.** Tech Lead só mergeia após AppSec PASS + QA.
+Tech Lead: merge só com QA PASS + este AppSec PASS. **Não mergeado por AppSec.**
