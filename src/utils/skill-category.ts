@@ -76,7 +76,7 @@ export function getSkillCategory(skill: {
 }): AppSkillCategoryId {
   const raw = skill.category;
   if (raw && KNOWN_CATEGORIES.has(raw)) {
-    return raw;
+    return raw as AppSkillCategoryId;
   }
   return UNCATEGORIZED_SKILL_CATEGORY;
 }

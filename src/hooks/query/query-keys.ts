@@ -85,6 +85,17 @@ export const PENTEST_ENGAGEMENTS_QUERY_KEYS = {
     ["pentest-engagements", "detail", engagementId] as const,
 } as const;
 
+/** Orchestration playbooks / runs (PROJETOSIN-196). */
+export const ORCHESTRATION_QUERY_KEYS = {
+  all: ["orchestration"] as const,
+  playbooks: (engagementId: string) =>
+    ["orchestration", "playbooks", engagementId] as const,
+  runs: (engagementId: string) =>
+    ["orchestration", "runs", engagementId] as const,
+  run: (engagementId: string, runId: string) =>
+    ["orchestration", "run", engagementId, runId] as const,
+} as const;
+
 /** Findings Service list / detail / stats (PROJETOSIN-188). */
 export const FINDINGS_QUERY_KEYS = {
   all: ["findings"] as const,

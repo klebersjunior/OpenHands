@@ -105,6 +105,9 @@ services:
       MSF_RPC_HOST: ${MSF_RPC_HOST:-runtime-network}
       MSF_RPC_PORT: ${MSF_RPC_PORT:-55553}
       MSF_PASSWORD: ${MSF_PASSWORD:-}
+      PENTEST_ENGINE_URL_ALLOWLIST: ${PENTEST_ENGINE_URL_ALLOWLIST:-eng-engine-pentestagent,eng-engine-cai}
+      PENTEST_ENGINE_PENTESTAGENT_URL: ${PENTEST_ENGINE_PENTESTAGENT_URL:-http://eng-engine-pentestagent:8080}
+      PENTEST_ENGINE_CAI_ENABLED: ${PENTEST_ENGINE_CAI_ENABLED:-false}
       ENGMGR_UPSTREAM: ${ENGMGR_UPSTREAM:-http://engagement-manager:8000}
       DEFAULT_PENTEST_PROFILE: ${DEFAULT_PENTEST_PROFILE:-pentester}
       # Internal username/password gate (opt-in; compose defaults to on).

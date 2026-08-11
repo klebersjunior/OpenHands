@@ -1,0 +1,19 @@
+{
+  "target": "10.0.0.5",
+  "results": [
+    {
+      "name": "OpenSSH Weak Key Exchange",
+      "severity": "medium",
+      "host": "10.0.0.5",
+      "port": "22/tcp",
+      "description": "Fixture OpenVAS finding for CI (no live GVM)."
+    },
+    {
+      "name": "HTTP Server Version Disclosure",
+      "severity": "low",
+      "host": "target.lab.local",
+      "port": "80/tcp",
+      "description": "Fixture finding from gvm_report_sample.json."
+    }
+  ]
+}

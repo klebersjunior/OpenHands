@@ -41,6 +41,7 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
 
 async def init_db() -> None:
     # Import models so metadata is populated
+    from app.models import custody as _custody  # noqa: F401
     from app.models import finding as _finding  # noqa: F401
 
     async with engine.begin() as conn:

@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { UsersSettingsScreen } from "#/routes/users-settings";
 import { AppLoginService } from "#/api/app-login-service";
 import { ALL_PENTEST_CAPABILITIES } from "#/types/pentest-rbac";
+import type { AppPermission } from "#/types/app-login-rbac";
 
 vi.mock("#/api/app-login-service", () => ({
   AppLoginService: {
@@ -34,7 +35,10 @@ vi.mock("react-i18next", () => ({
   }),
 }));
 
-const adminPermissions = ["app.users.manage", ...ALL_PENTEST_CAPABILITIES];
+const adminPermissions: AppPermission[] = [
+  "app.users.manage",
+  ...ALL_PENTEST_CAPABILITIES,
+];
 
 function renderScreen() {
   const client = new QueryClient({

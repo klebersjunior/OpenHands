@@ -39,6 +39,7 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
 
 async def init_db() -> None:
     from app.models import engagement as _e  # noqa: F401
+    from app.models import orchestration as _o  # noqa: F401
     from app.models import scope as _s  # noqa: F401
 
     async with engine.begin() as conn:
