@@ -64,6 +64,14 @@
         "defaultEnabled": false,
         "envFlag": "PENTEST_ENGINE_CAI_ENABLED"
       }
+    },
+    "otel": {
+      "_comment": "PROJETOSIN-199 — OTLP export to existing Heimdall SigNoz. Empty endpoint = no-op exporter (CI-safe). Does not provision SigNoz. Separate from PostHog product analytics.",
+      "enabled": null,
+      "defaultOtlpEndpoint": "",
+      "defaultOtlpHeaders": "",
+      "llmBodies": false,
+      "deploymentMode": "dev"
     }
   }
 }
