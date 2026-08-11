@@ -44,7 +44,27 @@ Não adicionar verbos IPC perigosos neste card. Install/shell/Frida permanecem n
 
 **Decisão:** Opção **B** no Electron (documentar `host.docker.internal` / IP do host gateway). Backend documenta env `PENTEST_ADB_TARGET=physical|emulator` no engagement metadata; provisioner **não** precisa recriar compose — só atualizar env do runtime ou um sidecar `adb-proxy` se já existir na Fase 2. Se Fase 2 só tem emulator interno, 194 adiciona doc + flag de override `ADB_HOST`/`ADB_PORT` para o host quando `physical`.
 
+### MVP — ponte ADB host (Opção B) — decisão registrada
+
+No Desktop Electron, o runtime do engagement (compose) **não** fala com o device via IPC. Continua usando o adaptador único `mcp-mobile` contra um endpoint ADB TCP genérico:
+
+| Env | Emulator (default) | Physical (194) |
+|---|---|---|
+| `PENTEST_ADB_TARGET` | `emulator` | `physical` (metadata da conversa / engagement) |
+| `ADB_HOST` | `android-emulator` (serviço compose) | `host.docker.internal` (Docker Desktop) ou IP gateway do host |
+| `ADB_PORT` | `5555` | `5555` (ou porta do `adb connect` LAN) |
+
+Fluxo:
+
+1. Host Electron expõe ADB via platform-tools (`window.pentestNative.adb.*` — card 193).
+2. UI/serviço 194 seleciona serial e persiste `physical_device_serial` + `pentest_adb_target=physical` no metadata da conversa.
+3. Provisioner / launcher injeta `ADB_HOST=host.docker.internal` (e `ADB_PORT`) no runtime **sem** recriar o compose inteiro quando possível.
+4. `mcp-mobile` continua com `adb connect $ADB_HOST:$ADB_PORT` — zero verbos `adb shell`/`install` no IPC do renderer.
+
+Linux sem `host.docker.internal`: usar IP da bridge Docker (`ip -4 addr show docker0`) ou `extra_hosts: ["host.docker.internal:host-gateway"]` no compose do engagement.
+
 ---
+
 
 ## Reconexão (contrato comportamental)
 

@@ -12,6 +12,7 @@ import { EmulatorEmptyState } from "#/components/features/emulator/emulator-empt
 import { EmulatorToolbar } from "#/components/features/emulator/emulator-toolbar";
 import { EmulatorApkUpload } from "#/components/features/emulator/emulator-apk-upload";
 import { EmulatorArtifactsList } from "#/components/features/emulator/emulator-artifacts-list";
+import { PhysicalDeviceStatus } from "#/components/features/emulator/physical-device-status";
 import { useConversationId } from "#/hooks/use-conversation-id";
 import { MOBILE_ARTIFACTS_QUERY_KEYS } from "#/hooks/query/query-keys";
 import { I18nKey } from "#/i18n/declaration";
@@ -178,6 +179,7 @@ export function EmulatorPanel() {
 
   return (
     <div className="flex h-full min-h-0 flex-col" data-testid="emulator-panel">
+      <PhysicalDeviceStatus conversationId={conversationId} />
       {view.kind === "live" && <EmulatorToolbar onRefresh={refreshIframe} />}
 
       <div className="flex min-h-0 flex-1 flex-col">

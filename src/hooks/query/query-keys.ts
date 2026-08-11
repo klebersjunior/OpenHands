@@ -96,6 +96,15 @@ export const MOBILE_ARTIFACTS_QUERY_KEYS = {
     ["mobile-artifacts", "list", engagementId] as const,
 } as const;
 
+/** Physical Android device via Electron ADB hooks (PROJETOSIN-194). */
+export const PHYSICAL_DEVICE_QUERY_KEYS = {
+  all: ["physical-device"] as const,
+  availability: ["physical-device", "availability"] as const,
+  devices: ["physical-device", "devices"] as const,
+  selection: (conversationId: string) =>
+    ["physical-device", "selection", conversationId] as const,
+} as const;
+
 export const APPWRITE_QUERY_KEYS = {
   all: ["appwrite"] as const,
   databases: ["appwrite", "databases"] as const,
