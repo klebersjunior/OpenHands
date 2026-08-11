@@ -26,6 +26,9 @@ SOURCE_TOOLS = frozenset(
         "mobsf",
         "openvas",
         "metasploit",
+        # mcp-engine (PROJETOSIN-197)
+        "pentestagent",
+        "cai",
     }
 )
 
@@ -203,6 +206,29 @@ def _host_matches(pattern: str, host: str) -> bool:
     return False
 
 
+def _emit_scope_violation(target: str) -> None:
+    """Best-effort canonical OTEL event (PROJETOSIN-199); never blocks deny path.
+
+    Uses the OpenTelemetry API directly so we do not collide with this package's
+    ``shared`` name (mcp-servers/shared vs services/shared).
+    """
+    try:
+        from opentelemetry import trace
+        from opentelemetry.trace import Status, StatusCode
+
+        tracer = trace.get_tracer("pentest")
+        with tracer.start_as_current_span("pentest.scope.violation") as span:
+            span.set_attribute("target", target)
+            span.set_attribute("error_code", "scope_violation")
+            span.set_attribute("ok", False)
+            eng = os.environ.get("ENGAGEMENT_ID", "").strip()
+            if eng:
+                span.set_attribute("engagement.id", eng)
+            span.set_status(Status(StatusCode.ERROR, "scope_violation"))
+    except Exception:
+        pass
+
+
 def assert_in_scope(target: str) -> None:
     """
     Fail-closed: empty/missing PENTEST_SCOPE_ALLOWLIST rejects all targets.
@@ -214,6 +240,7 @@ def assert_in_scope(target: str) -> None:
     """
     allowlist = _parse_allowlist()
     if not allowlist:
+        _emit_scope_violation(target)
         raise ScopeViolationError(
             target,
             f"{SCOPE_ALLOWLIST_ENV} is empty or unset (fail-closed)",
@@ -223,6 +250,7 @@ def assert_in_scope(target: str) -> None:
         pattern = extract_host(entry) if "://" in entry else entry
         if _host_matches(pattern, host):
             return
+    _emit_scope_violation(target)
     raise ScopeViolationError(target)
 
 

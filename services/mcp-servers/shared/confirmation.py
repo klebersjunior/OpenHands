@@ -26,8 +26,11 @@ ACTIVE_TOOLS = frozenset(
         "net_nmap_scan",
         "net_gvm_start_scan",
         "net_msf_rpc_execute",
+        # mcp-engine (PROJETOSIN-197)
+        "engine_exploit",
     }
 )
+
 # Outside MVP Fase 1 — autonomous mode does not block extra tools yet.
 MAX_RISK_TOOLS: frozenset[str] = frozenset()
 
