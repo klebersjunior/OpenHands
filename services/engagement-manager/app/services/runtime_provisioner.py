@@ -14,6 +14,8 @@ from app.models.engagement import Engagement, ScopeRule
 ComposeRunner = Callable[[list[str], Path], Awaitable[int]]
 
 DRY_RUN_MOBSF_API_KEY = "test-mobsf-key"
+DRY_RUN_MSF_RPC_TOKEN = "test-msf-rpc-token"
+DRY_RUN_GVM_PASSWORD = "test-gvm-password"
 
 
 async def _default_runner(args: list[str], cwd: Path) -> int:
@@ -67,8 +69,15 @@ class RuntimeProvisioner:
         self.work_root = Path(settings.compose_work_dir)
         self.android_emulator_image = settings.android_emulator_image
         self.mobsf_image = settings.mobsf_image
+        self.runtime_network_image = settings.runtime_network_image
+        self.gvm_image = settings.gvm_image
+        self.msf_rpc_port = settings.msf_rpc_port
+        self.gvm_min_ram_gb = settings.gvm_min_ram_gb
+        self.findings_service_url = settings.findings_service_url
+        self.session_api_key = settings.session_api_key
         self.allow_slow_emulator = settings.allow_slow_emulator
         self.mcp_mobile_cmd = settings.mcp_mobile_cmd
+        self.mcp_network_cmd = settings.mcp_network_cmd
         base = templates_dir or (
             Path(__file__).resolve().parents[1] / "templates"
         )
@@ -86,6 +95,16 @@ class RuntimeProvisioner:
         if self.dry_run:
             return DRY_RUN_MOBSF_API_KEY
         return secrets.token_urlsafe(32)
+
+    def _msf_rpc_token(self) -> str:
+        if self.dry_run:
+            return DRY_RUN_MSF_RPC_TOKEN
+        return secrets.token_urlsafe(32)
+
+    def _gvm_password(self) -> str:
+        if self.dry_run:
+            return DRY_RUN_GVM_PASSWORD
+        return secrets.token_urlsafe(24)
 
     def _resolve_kvm(self) -> bool:
         if self.dry_run:
@@ -118,6 +137,12 @@ class RuntimeProvisioner:
             for r in scope_rules
             if r.rule_type == "deny"
         ]
+        runtime_image = (
+            self.runtime_network_image
+            if engagement.runtime_profile == "network"
+            else f"ghcr.io/heimdall/runtime-{engagement.runtime_profile}:latest"
+        )
+        scope_allowlist = ",".join(str(r["value"]) for r in allow)
         ctx: dict = {
             "project": short,
             "network_internal": f"{short}-internal",
@@ -125,10 +150,9 @@ class RuntimeProvisioner:
             "volume_prefix": short,
             "allow_rules": allow,
             "deny_rules": deny,
+            "scope_allowlist": scope_allowlist,
             "autonomy_mode": engagement.autonomy_mode or "semi_autonomous",
-            "runtime_image": (
-                f"ghcr.io/heimdall/runtime-{engagement.runtime_profile}:latest"
-            ),
+            "runtime_image": runtime_image,
         }
         if engagement.runtime_profile == "mobile":
             ctx.update(
@@ -139,6 +163,22 @@ class RuntimeProvisioner:
                     "mcp_mobile_cmd": self.mcp_mobile_cmd,
                     "kvm_available": self._resolve_kvm(),
                     "emulator_device": "Samsung Galaxy S10",
+                }
+            )
+        if engagement.runtime_profile == "network":
+            ctx.update(
+                {
+                    "engagement_id": str(engagement.id),
+                    "findings_service_url": self.findings_service_url,
+                    "session_api_key": self.session_api_key or "",
+                    "mcp_network_cmd": self.mcp_network_cmd,
+                    "mcp_network_use_real_binaries": "0",
+                    "gvm_image": self.gvm_image,
+                    "gvm_user": "admin",
+                    "gvm_password": self._gvm_password(),
+                    "gvm_min_ram_gb": self.gvm_min_ram_gb,
+                    "msf_rpc_port": self.msf_rpc_port,
+                    "msf_rpc_token": self._msf_rpc_token(),
                 }
             )
         return self.env.get_template(template_name).render(**ctx)

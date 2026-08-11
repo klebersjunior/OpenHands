@@ -1,0 +1,26 @@
+[
+  {
+    "id": "web-blackbox-recon",
+    "title": "Web blackbox recon",
+    "phases": ["recon", "scan", "analyze"],
+    "domains": ["web"],
+    "engine_ids": ["pentestagent", "cai"],
+    "stub_path": "/opt/engines/playbooks/web-blackbox-recon"
+  },
+  {
+    "id": "web-scan-passive",
+    "title": "Web passive scan",
+    "phases": ["scan", "analyze"],
+    "domains": ["web"],
+    "engine_ids": ["pentestagent", "cai"],
+    "stub_path": "/opt/engines/playbooks/web-scan-passive"
+  },
+  {
+    "id": "web-exploit-mvp",
+    "title": "Web exploit (gated)",
+    "phases": ["analyze", "exploit"],
+    "domains": ["web"],
+    "engine_ids": ["pentestagent", "cai"],
+    "stub_path": "/opt/engines/playbooks/web-exploit-mvp"
+  }
+]

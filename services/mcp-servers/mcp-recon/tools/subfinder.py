@@ -13,6 +13,7 @@ from shared.normalize import (
     assert_in_scope,
     normalize_finding,
 )
+from shared.otel_tool_span import with_mcp_tool_span
 from shared.tool_result import err, ok
 
 Runner = Callable[[str], Awaitable[list[str]]]
@@ -44,6 +45,7 @@ async def _default_runner(domain: str) -> list[str]:
     return [f"www.{domain}", f"api.{domain}"]
 
 
+@with_mcp_tool_span("recon_subfinder")
 async def run_subfinder(
     *,
     domain: str,

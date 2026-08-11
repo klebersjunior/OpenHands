@@ -25,8 +25,10 @@ async def lifespan(_app: FastAPI):
         "DEFAULT_PENTEST_PROFILE", settings.default_pentest_profile
     )
     from shared.auth_middleware import assert_session_api_key_not_insecure_default
+    from shared.otel_setup import setup_otel
 
     assert_session_api_key_not_insecure_default()
+    setup_otel("engagement-manager")
     await init_db()
     yield
 

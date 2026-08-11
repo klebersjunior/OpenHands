@@ -17,7 +17,13 @@
     "agentCanvas": "ghcr.io/openhands/agent-canvas",
     "_comment_mobile": "PROJETOSIN-191 — EngMgr compose-mobile-runtime pins (no host publish). Override via ANDROID_EMULATOR_IMAGE / MOBSF_IMAGE env on EngMgr.",
     "androidEmulator": "budtmo/docker-android:emulator_13.0",
-    "mobsf": "opensecurity/mobile-security-framework-mobsf:latest"
+    "mobsf": "opensecurity/mobile-security-framework-mobsf:latest",
+    "_comment_engines": "PROJETOSIN-197 — engine runtime pins (no secrets). Override via PENTESTAGENT_IMAGE / CAI_IMAGE on EngMgr.",
+    "pentestAgent": "ghcr.io/heimdall/pentestagent:latest",
+    "cai": "ghcr.io/heimdall/cai:latest",
+    "_comment_network": "PROJETOSIN-198 — EngMgr compose-network-runtime pins. GVM via compose profile gvm (heavy).",
+    "runtimeNetwork": "ghcr.io/heimdall/runtime-network:latest",
+    "gvm": "greenbone/gvmd:stable"
   },
   "ports": {
     "agentServer": 18000,
@@ -25,7 +31,8 @@
     "findingsService": 18002,
     "engagementManager": 18003,
     "proxy": 8000,
-    "desktopVnc": 6901
+    "desktopVnc": 6901,
+    "msfRpc": 55553
   },
   "paths": {
     "stateSubdir": "agent-canvas",
@@ -49,6 +56,32 @@
     "electronComposeRoots": [
       "~/.openhands/engagements",
       "~/.openhands/agent-canvas"
-    ]
+    ],
+    "engines": {
+      "_comment": "PROJETOSIN-197 — mcp-engine motor pins (tags only; no secrets). Compose: services/engagement-manager/app/templates/compose-engine-runtime.yml.j2",
+      "pentestagent": {
+        "imageKey": "pentestAgent",
+        "defaultEnabled": true
+      },
+      "cai": {
+        "imageKey": "cai",
+        "defaultEnabled": false,
+        "envFlag": "PENTEST_ENGINE_CAI_ENABLED"
+      }
+    },
+    "network": {
+      "_comment": "PROJETOSIN-198 — optional compose profiles gvm/msf; GVM RAM guidance for operators.",
+      "gvmMinRamGb": 8,
+      "msfRpcPort": 55553,
+      "findingsServiceUrl": "http://findings-service:8000"
+    },
+    "otel": {
+      "_comment": "PROJETOSIN-199 — OTLP export to existing Heimdall SigNoz. Empty endpoint = no-op exporter (CI-safe). Does not provision SigNoz. Separate from PostHog product analytics.",
+      "enabled": null,
+      "defaultOtlpEndpoint": "",
+      "defaultOtlpHeaders": "",
+      "llmBodies": false,
+      "deploymentMode": "dev"
+    }
   }
 }

@@ -9,7 +9,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.finding import FINDING_STATUSES, Finding
 from app.schemas.finding import FindingCreate, FindingUpdate, TriageRequest
+from app.services.custody_service import CustodyService
 from app.services.dedup_service import compute_dedupe_hash
+from shared.otel_setup import emit_finding_mutate
 
 VALID_TRANSITIONS: dict[str, set[str]] = {
     "new": {"triaging"},
@@ -72,6 +74,23 @@ class FindingsService:
         self.db.add(finding)
         await self.db.commit()
         await self.db.refresh(finding)
+        emit_finding_mutate(
+            action="create",
+            finding_id=str(finding.id),
+            engagement_id=str(finding.engagement_id),
+            extra={"severity": finding.severity, "source_tool": finding.source_tool},
+        )
+        await CustodyService(self.db).append(
+            engagement_id=finding.engagement_id,
+            actor=created_by,
+            action="finding.create",
+            resource_type="finding",
+            resource_id=str(finding.id),
+            metadata={
+                "severity": finding.severity,
+                "source_tool": finding.source_tool,
+            },
+        )
         return finding
 
     def _list_query(
