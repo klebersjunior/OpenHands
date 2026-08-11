@@ -15,6 +15,8 @@ if str(_SERVICES_ROOT) not in sys.path:
 from app.config import get_settings
 from app.db import init_db
 from app.routers import findings, me, triage
+from app.routers.custody import internal_router as custody_internal_router
+from app.routers.custody import router as custody_router
 
 
 @asynccontextmanager
@@ -26,8 +28,10 @@ async def lifespan(_app: FastAPI):
         "DEFAULT_PENTEST_PROFILE", settings.default_pentest_profile
     )
     from shared.auth_middleware import assert_session_api_key_not_insecure_default
+    from shared.otel_setup import setup_otel
 
     assert_session_api_key_not_insecure_default()
+    setup_otel("findings-service")
     await init_db()
     yield
 
@@ -36,6 +40,8 @@ app = FastAPI(title="Findings Service", version="0.1.0", lifespan=lifespan)
 app.include_router(findings.router)
 app.include_router(triage.router)
 app.include_router(me.router)
+app.include_router(custody_router)
+app.include_router(custody_internal_router)
 
 
 @app.get("/health")
