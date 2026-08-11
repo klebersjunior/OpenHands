@@ -44,4 +44,4 @@ build-fresh/
 # Downloaded Node.js distribution (populated by `npm run download-node` before packaging)
 /resources/node/
 
-/projects/*
+projects/*
