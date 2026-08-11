@@ -1,0 +1,32 @@
+{
+  "id": "mobile-static-mvp",
+  "title": "Mobile static analysis (MVP)",
+  "domain": "mobile",
+  "engine_id": "pentestagent",
+  "phases": [
+    {
+      "id": "recon",
+      "tools": ["engine_start_phase"],
+      "engine_phase": "recon",
+      "gate": "none"
+    },
+    {
+      "id": "scan",
+      "tools": ["engine_start_phase"],
+      "engine_phase": "scan",
+      "gate": "none"
+    },
+    {
+      "id": "analyze",
+      "tools": ["engine_start_phase"],
+      "engine_phase": "analyze",
+      "gate": "none"
+    },
+    {
+      "id": "exploit",
+      "tools": ["engine_start_phase"],
+      "engine_phase": "exploit",
+      "gate": "confirmation"
+    }
+  ]
+}
