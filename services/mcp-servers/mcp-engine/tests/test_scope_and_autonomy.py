@@ -32,6 +32,37 @@ async def test_ac_197_2_scope_violation_no_spawn():
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "targets",
+    [
+        [],
+        None,
+        [""],
+        ["  "],
+    ],
+)
+async def test_high1_empty_or_omitted_targets_fail_closed(targets):
+    """AppSec HIGH-1: empty/None targets must not spawn (anti-vacuous scope gate)."""
+    from tools.start_phase import run_start_phase
+
+    transport = FakeFindingsTransport()
+    client = FindingsClient(base_url="http://findings.test", transport=transport)
+
+    kwargs: dict = {
+        "engine_id": "pentestagent",
+        "phase": "scan",
+        "findings": client,
+    }
+    if targets is not None:
+        kwargs["targets"] = targets
+
+    body = json.loads(await run_start_phase(**kwargs))
+    assert body["ok"] is False
+    assert body["error"] == "invalid_targets"
+    assert transport.posts == []
+
+
+@pytest.mark.asyncio
 async def test_ac_197_2_empty_allowlist_fail_closed(monkeypatch):
     monkeypatch.setenv("PENTEST_SCOPE_ALLOWLIST", "")
     from tools.start_phase import run_start_phase

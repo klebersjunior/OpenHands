@@ -14,6 +14,8 @@ services:
       PENTEST_AUTONOMY_MODE: "{{ autonomy_mode }}"
       PENTEST_MCP_ENGINE_CMD: "{{ mcp_engine_cmd | default('') }}"
       PENTEST_ENGINE_PENTESTAGENT_URL: "http://{{ project }}-engine-pentestagent:8080"
+      {# Positive SSRF allowlist — compose DNS names only (no host loopback). #}
+      PENTEST_ENGINE_URL_ALLOWLIST: "{{ project }}-engine-pentestagent{% if cai_enabled | default(false) %},{{ project }}-engine-cai{% endif %}"
       PENTEST_ENGINE_CAI_ENABLED: "{{ cai_enabled | default('false') }}"
 {% if cai_enabled | default(false) %}
       PENTEST_ENGINE_CAI_URL: "http://{{ project }}-engine-cai:8080"

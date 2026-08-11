@@ -55,7 +55,7 @@ async def run_start_phase(
 
     ollama_err = assert_no_ollama_llm()
     if ollama_err:
-        return err("engine_unavailable", message=ollama_err)
+        return err("self_hosted_llm_forbidden", message=ollama_err)
 
     caps = configured_capabilities()
     if caps is not None:
@@ -72,7 +72,17 @@ async def run_start_phase(
                 required=CAP_EXPLOIT_ACTIVE,
             )
 
-    target_list = list(targets or [])
+    # Fail-closed: empty/omitted targets skip assert_in_scope and must not spawn.
+    target_list = [
+        t.strip()
+        for t in (targets or [])
+        if isinstance(t, str) and t.strip()
+    ]
+    if not target_list:
+        return err(
+            "invalid_targets",
+            message="at least one in-scope target is required",
+        )
     for target in target_list:
         try:
             assert_in_scope(target)

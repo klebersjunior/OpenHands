@@ -31,7 +31,13 @@ def _env(monkeypatch):
     monkeypatch.delenv("PENTEST_ENGINE_CAI_ENABLED", raising=False)
     monkeypatch.delenv("PENTEST_CAPABILITIES", raising=False)
     monkeypatch.delenv("PENTEST_ENGINE_LLM_BASE_URL", raising=False)
+    monkeypatch.delenv("LITELLM_BASE_URL", raising=False)
+    monkeypatch.delenv("OPENAI_API_BASE", raising=False)
     monkeypatch.delenv("OLLAMA_HOST", raising=False)
+    monkeypatch.delenv("OLLAMA_BASE_URL", raising=False)
+    monkeypatch.delenv("PENTEST_ENGINE_URL_ALLOWLIST", raising=False)
+    monkeypatch.delenv("PENTEST_ENGINE_PENTESTAGENT_URL", raising=False)
+    monkeypatch.delenv("PENTEST_ENGINE_CAI_URL", raising=False)
 
     from adapters.base import reset_run_registry
     from shared.confirmation import clear_confirmation_state

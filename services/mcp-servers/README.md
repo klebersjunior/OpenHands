@@ -47,7 +47,9 @@ launcher must **not** attach `PENTEST_MCP_MOBILE_CMD`. Without
 | `PENTEST_ENGINE_CAI_ENABLED` | `true` to expose CAI in `engine_list_engines` (default off) |
 | `PENTEST_ENGINE_PENTESTAGENT_URL` / `_CONTAINER` | Internal control plane for PentestAgent (not host loopback) |
 | `PENTEST_ENGINE_CAI_URL` | Internal control plane for CAI when enabled |
+| `PENTEST_ENGINE_URL_ALLOWLIST` | CSV of allowed engine control-plane **hostnames** (compose DNS). Fail-closed when empty; loopback/link-local/metadata always rejected |
 | `PENTEST_ENGINE_MOCK` | `1` (default when URL unset) — unit/CI path without Docker engine images |
+| `PENTEST_ENGINE_LLM_BASE_URL` / `LITELLM_BASE_URL` | Enterprise LiteLLM only — Ollama / `localhost:11434` / `OLLAMA_*` rejected (`self_hosted_llm_forbidden`) |
 | `PENTEST_CAPABILITIES` | Optional CSV of profile capabilities for tool-level RBAC |
 | `ENGAGEMENT_ID` | Correlation id for engine runs / findings |
 | `MOBSF_URL` | MobSF base URL (e.g. `http://mobsf:8000`); required for MobSF tools |

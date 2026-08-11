@@ -6,7 +6,11 @@ import json
 
 import pytest
 
-from adapters.base import RunRegistry, assert_no_ollama_llm
+from adapters.base import (
+    RunRegistry,
+    assert_allowed_engine_url,
+    assert_no_ollama_llm,
+)
 from adapters.cai import CaiAdapter
 from adapters.pentestagent import PentestAgentAdapter
 from shared.findings_client import FindingsClient
@@ -115,6 +119,7 @@ async def test_cancel_run_best_effort():
 @pytest.mark.asyncio
 async def test_loopback_engine_url_unavailable(monkeypatch):
     monkeypatch.setenv("PENTEST_ENGINE_MOCK", "0")
+    monkeypatch.setenv("PENTEST_ENGINE_URL_ALLOWLIST", "engine-pentestagent")
     monkeypatch.setenv(
         "PENTEST_ENGINE_PENTESTAGENT_URL", "http://127.0.0.1:9999"
     )
@@ -122,9 +127,77 @@ async def test_loopback_engine_url_unavailable(monkeypatch):
     assert pa.status() == "unavailable"
 
 
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://127.0.0.1:9999",
+        "http://127.1:9999",
+        "http://0.0.0.0:9999",
+        "http://169.254.169.254/latest/meta-data/",
+        "http://metadata.google.internal/",
+        "http://[::1]:8080",
+        "http://localhost:8080",
+        "http://user:pass@engine-pentestagent:8080",
+        "https://engine-pentestagent:8080",
+        "http://2130706433:8080",
+    ],
+)
+def test_high2_engine_url_ssrf_rejected(monkeypatch, url):
+    """AppSec HIGH-2: denylist-only loopback is insufficient — allowlist + IP checks."""
+    monkeypatch.setenv("PENTEST_ENGINE_URL_ALLOWLIST", "engine-pentestagent")
+    assert assert_allowed_engine_url(url) is not None
+
+
+def test_high2_engine_url_allowlisted_compose_host(monkeypatch):
+    monkeypatch.setenv("PENTEST_ENGINE_URL_ALLOWLIST", "engine-pentestagent")
+    assert (
+        assert_allowed_engine_url("http://engine-pentestagent:8080") is None
+    )
+
+
+def test_high2_engine_url_empty_allowlist_fail_closed(monkeypatch):
+    monkeypatch.delenv("PENTEST_ENGINE_URL_ALLOWLIST", raising=False)
+    assert (
+        assert_allowed_engine_url("http://engine-pentestagent:8080") is not None
+    )
+
+
 @pytest.mark.asyncio
-async def test_ollama_llm_rejected(monkeypatch):
-    monkeypatch.setenv("OLLAMA_HOST", "http://127.0.0.1:11434")
+async def test_high2_non_allowlisted_url_marks_adapter_unavailable(monkeypatch):
+    monkeypatch.setenv("PENTEST_ENGINE_MOCK", "0")
+    monkeypatch.setenv("PENTEST_ENGINE_URL_ALLOWLIST", "engine-pentestagent")
+    monkeypatch.setenv(
+        "PENTEST_ENGINE_PENTESTAGENT_URL", "http://169.254.169.254/"
+    )
+    assert PentestAgentAdapter().status() == "unavailable"
+
+
+@pytest.mark.asyncio
+async def test_high2_allowlisted_url_ready_when_not_mock(monkeypatch):
+    monkeypatch.setenv("PENTEST_ENGINE_MOCK", "0")
+    monkeypatch.setenv("PENTEST_ENGINE_URL_ALLOWLIST", "engine-pentestagent")
+    monkeypatch.setenv(
+        "PENTEST_ENGINE_PENTESTAGENT_URL", "http://engine-pentestagent:8080"
+    )
+    assert PentestAgentAdapter().status() == "ready"
+
+
+@pytest.mark.parametrize(
+    ("env_key", "env_value"),
+    [
+        ("OLLAMA_HOST", "http://localhost:11434"),
+        ("OLLAMA_HOST", "http://127.0.0.1:11434"),
+        ("OLLAMA_BASE_URL", "http://ollama:11434"),
+        ("LITELLM_BASE_URL", "http://localhost:11434"),
+        ("LITELLM_BASE_URL", "http://127.0.0.1:11434"),
+        ("PENTEST_ENGINE_LLM_BASE_URL", "http://127.1:11434"),
+        ("OPENAI_API_BASE", "http://my-ollama-box:8080/v1"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_high3_ollama_self_hosted_rejected(monkeypatch, env_key, env_value):
+    """AppSec HIGH-3: localhost:11434 and OLLAMA_* must be typed-reject."""
+    monkeypatch.setenv(env_key, env_value)
     assert assert_no_ollama_llm() is not None
 
     body = json.loads(
@@ -135,4 +208,12 @@ async def test_ollama_llm_rejected(monkeypatch):
         )
     )
     assert body["ok"] is False
-    assert body["error"] == "engine_unavailable"
+    assert body["error"] == "self_hosted_llm_forbidden"
+
+
+@pytest.mark.asyncio
+async def test_high3_enterprise_litellm_allowed(monkeypatch):
+    monkeypatch.setenv(
+        "LITELLM_BASE_URL", "https://litellm.heimdallsec.example/v1"
+    )
+    assert assert_no_ollama_llm() is None

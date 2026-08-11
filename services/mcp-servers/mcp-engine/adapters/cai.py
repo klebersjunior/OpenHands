@@ -4,11 +4,15 @@ from __future__ import annotations
 
 import os
 from typing import Any
-from urllib.parse import urlparse
 
 import httpx
 
-from adapters.base import RunRecord, RunRegistry, emit_run_event
+from adapters.base import (
+    RunRecord,
+    RunRegistry,
+    assert_allowed_engine_url,
+    emit_run_event,
+)
 from shared.findings_client import FindingsClient
 from shared.normalize import normalize_finding
 
@@ -36,11 +40,6 @@ def _mock_mode() -> bool:
     return not os.environ.get(CAI_URL_ENV, "").strip()
 
 
-def _is_loopback_url(url: str) -> bool:
-    host = (urlparse(url).hostname or "").lower()
-    return host in ("127.0.0.1", "localhost", "::1")
-
-
 class CaiAdapter:
     engine_id = ENGINE_ID
     capabilities = list(CAPABILITIES)
@@ -62,7 +61,7 @@ class CaiAdapter:
         url = os.environ.get(CAI_URL_ENV, "").strip()
         if not url:
             return "unavailable"
-        if _is_loopback_url(url):
+        if assert_allowed_engine_url(url) is not None:
             return "unavailable"
         return "ready"
 
@@ -134,7 +133,7 @@ class CaiAdapter:
 
     async def _run_remote(self, run: RunRecord, registry: RunRegistry) -> RunRecord:
         url = os.environ.get(CAI_URL_ENV, "").rstrip("/")
-        if not url or _is_loopback_url(url):
+        if not url or assert_allowed_engine_url(url) is not None:
             run.status = "failed"
             run.error = "engine_unavailable"
             registry.put(run)
