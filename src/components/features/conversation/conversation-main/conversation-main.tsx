@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { cn } from "#/utils/utils";
 import { ChatInterfaceWrapper } from "./chat-interface-wrapper";
 import { ConversationTabContent } from "../conversation-tabs/conversation-tab-content/conversation-tab-content";
@@ -11,11 +12,102 @@ import {
   SIDEBAR_RAIL_COLLAPSE_MAX_WIDTH,
 } from "#/hooks/use-breakpoint";
 import { SidebarMobileMenuToggle } from "#/components/features/sidebar/sidebar-mobile-menu-toggle";
+import {
+  PentestAutonomyBanners,
+  PentestAutonomyHeaderControls,
+  usePentestConversationAutonomy,
+} from "#/components/features/pentest/pentest-autonomy-header";
+import { useOptionalConversationId } from "#/hooks/use-conversation-id";
 
 function getDesktopTabPanelClass(isRightPanelShown: boolean) {
   return isRightPanelShown
     ? "translate-x-0 opacity-100"
     : "w-0 translate-x-full opacity-0";
+}
+
+function ChatPaneHeaderShell({
+  isSidebarRailHidden,
+  trailing,
+  banners,
+}: {
+  isSidebarRailHidden: boolean;
+  trailing: ReactNode;
+  banners: ReactNode;
+}) {
+  return (
+    <>
+      <div
+        data-testid="chat-pane-header"
+        className={cn(
+          "flex h-10 min-h-10 shrink-0 items-center",
+          isSidebarRailHidden && "gap-2 pl-2.5",
+        )}
+      >
+        {isSidebarRailHidden ? <SidebarMobileMenuToggle /> : null}
+        <div className="min-w-0 flex-1">
+          <ConversationNameWithStatus trailing={trailing} />
+        </div>
+      </div>
+      {banners}
+    </>
+  );
+}
+
+function ChatPaneHeader({
+  isSidebarRailHidden,
+}: {
+  isSidebarRailHidden: boolean;
+}) {
+  const { conversationId } = useOptionalConversationId();
+
+  // Layout tests / non-conversation shells lack conversationId — keep header
+  // mountable without pentest autonomy hooks (QueryClient / engagement).
+  if (!conversationId) {
+    return (
+      <ChatPaneHeaderShell
+        isSidebarRailHidden={isSidebarRailHidden}
+        trailing={null}
+        banners={null}
+      />
+    );
+  }
+
+  return (
+    <ChatPaneHeaderWithAutonomy isSidebarRailHidden={isSidebarRailHidden} />
+  );
+}
+
+function ChatPaneHeaderWithAutonomy({
+  isSidebarRailHidden,
+}: {
+  isSidebarRailHidden: boolean;
+}) {
+  const autonomy = usePentestConversationAutonomy();
+
+  return (
+    <ChatPaneHeaderShell
+      isSidebarRailHidden={isSidebarRailHidden}
+      trailing={
+        autonomy.active ? (
+          <PentestAutonomyHeaderControls
+            autonomyMode={autonomy.autonomyMode}
+            isLoading={autonomy.isLoading}
+            isSaving={autonomy.isSaving}
+            isArchived={autonomy.isArchived}
+            onChange={autonomy.patchAutonomy}
+          />
+        ) : null
+      }
+      banners={
+        autonomy.active ? (
+          <PentestAutonomyBanners
+            pendingRestart={autonomy.propagation === "pending_restart"}
+            errorMessage={autonomy.errorMessage}
+          />
+        ) : null
+      }
+    />
+  );
 }
 
 export function ConversationMain() {
@@ -70,18 +162,7 @@ export function ConversationMain() {
               : undefined
           }
         >
-          <div
-            data-testid="chat-pane-header"
-            className={cn(
-              "flex h-10 min-h-10 shrink-0 items-center",
-              isSidebarRailHidden && "gap-2 pl-2.5",
-            )}
-          >
-            {isSidebarRailHidden ? <SidebarMobileMenuToggle /> : null}
-            <div className="min-w-0 flex-1">
-              <ConversationNameWithStatus />
-            </div>
-          </div>
+          <ChatPaneHeader isSidebarRailHidden={isSidebarRailHidden} />
           <div className="flex-1 min-h-0 flex flex-col">
             <ChatInterfaceWrapper
               isRightPanelShown={!isMobile && isRightPanelShown}
