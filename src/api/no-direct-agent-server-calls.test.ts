@@ -24,6 +24,8 @@ const ALLOWED_AD_HOC_HTTP_FILES = new Set([
   "api/pentest/mobile-artifacts-service.ts",
   // Engagement Manager get/PATCH autonomy (PROJETOSIN-195).
   "api/pentest/engagement-service.ts",
+  // Engagement Manager orchestration playbooks/runs (PROJETOSIN-196).
+  "api/pentest/orchestration-service.ts",
 ]);
 
 function collectSourceFiles(dir: string): string[] {

@@ -17,6 +17,7 @@ import {
   PentestAutonomyHeaderControls,
   usePentestConversationAutonomy,
 } from "#/components/features/pentest/pentest-autonomy-header";
+import { PentestOrchestrationPanel } from "#/components/features/pentest/pentest-orchestration-panel";
 import { useOptionalConversationId } from "#/hooks/use-conversation-id";
 
 function getDesktopTabPanelClass(isRightPanelShown: boolean) {
@@ -100,10 +101,15 @@ function ChatPaneHeaderWithAutonomy({
       }
       banners={
         autonomy.active ? (
-          <PentestAutonomyBanners
-            pendingRestart={autonomy.propagation === "pending_restart"}
-            errorMessage={autonomy.errorMessage}
-          />
+          <>
+            <PentestAutonomyBanners
+              pendingRestart={autonomy.propagation === "pending_restart"}
+              errorMessage={autonomy.errorMessage}
+            />
+            {autonomy.engagementId ? (
+              <PentestOrchestrationPanel engagementId={autonomy.engagementId} />
+            ) : null}
+          </>
         ) : null
       }
     />
